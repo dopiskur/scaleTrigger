@@ -76,9 +76,9 @@ dotnet test ScaleTrigger.Tests
 `ScaleTrigger.Tests` is an integration suite (`WebApplicationFactory<Program>`) that hosts the real app in-process. Two layers:
 
 - **Sqlite-backed** (no Docker, no Azure, no manual setup, needs no `appsettings.json` - a throwaway file per test class, all required settings supplied by the test factory): the core vote flow (`add` → `report` → `reset`), `LoadConfig` validation, JWT auth (login, unauthenticated/authenticated `POST /api/vote/add`), and the health endpoints.
-- **MySQL/PostgreSQL-backed** (Testcontainers - needs Docker running locally/in CI, one real container per provider per test run): the same core flow again, but through those providers' actual stored procedures/functions (`SchemaScripts.MySql`/`PostgreSql`) instead of SQLite's plain SQL - schema provisioning, `VoteAdd`/`VoteReportGet`/`DbCpuBurn`, `LoadConfig` round-tripping, and `Reset`.
+- **MSSQL/MySQL/PostgreSQL-backed** (Testcontainers - needs Docker running locally/in CI, one real container per provider per test run): the same core flow again, but through those providers' actual stored procedures/functions (`SchemaScripts.MsSql`/`MySql`/`PostgreSql`) instead of SQLite's plain SQL - schema provisioning, `VoteAdd`/`VoteReportGet`/`DbCpuBurn`, `LoadConfig` round-tripping, and `Reset`. MSSQL's Testcontainers module only manages the SA login against `master`, so `MsSqlScaleTriggerApplicationFactory` creates a named database itself before the app connects, matching how `MsSqlRepository` is used in production (an already-existing named database, never `CREATE DATABASE` from app code).
 
-MSSQL isn't covered by either layer. Runs in CI (`.github/workflows/deploy-api.yml`, which has Docker available by default on `ubuntu-latest`) before every deploy.
+Runs in CI (`.github/workflows/deploy-api.yml`, which has Docker available by default on `ubuntu-latest`) before every deploy.
 
 ## Azure demo infrastructure: one click, provisions and deploys everything
 
@@ -173,6 +173,7 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 | `GET /api/vote/report` | anonymous | `{ total, payloadCount, payloadTotalBytes }`, computed by the database |
 | `POST /api/vote/reset` | optional | Drops and recreates the schema; database ends up looking brand new |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password" }` → `{ "token" }` |
+| `GET /api/auth/status` | anonymous | `{ "authRequired": true\|false }`, reflecting `Auth:Enabled`. No side effects - used by the load-test scripts to detect whether they need to log in, instead of a probe vote |
 | `GET /api/loadconfig` | anonymous | Current `Load:*` ranges as stored in the database |
 | `POST /api/loadconfig` | optional | Updates one or more `Load:*` ranges live, see "How it works" |
 | `GET /api/nodebenchmark/hardware` | anonymous | Detects the hosting environment (Azure App Service/Container Apps, AWS ECS/EC2, Kubernetes, generic Docker, bare metal) and reports CPU/memory/disk |
@@ -185,7 +186,7 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 
 Picking a `Load:*` range by hand is guesswork: what does `CpuIterationsPerVote = 50000` even mean on this particular node? `POST /api/nodebenchmark/run` answers that in about 20 seconds instead of a trial-and-error series of load-test runs. It benchmarks the current node in isolation, no vote traffic involved, in three steps:
 
-1. **CPU**: chained SHA-512 hashing on every logical processor at once (dedicated threads, not the thread pool, so a benchmark taken mid-load-test isn't starved by concurrent request handling) for `NodeBenchmark:CpuDurationSeconds` (default 20s); score is total hashes/sec summed across cores.
+1. **CPU**: chained SHA-512 hashing on every logical processor at once (dedicated threads, not the thread pool, so a benchmark taken mid-load-test isn't starved by concurrent request handling) for `NodeBenchmark:CpuDurationSeconds` (default 20s); score is total hashes/sec summed across cores. Each thread runs at `ThreadPriority.Highest` to keep the OS scheduler from starving it against everything else on the box, though in a containerized environment (cgroups/CFS quota) that priority only affects scheduling within the container's own share of CPU time, not the quota itself.
 2. **Memory**: repeatedly fills a `NodeBenchmark:MemoryBlockMegabytes` buffer (default 64 MB) `NodeBenchmark:MemoryRepetitions` times (default 5); score is MB/sec, from the median fill time.
 3. **Disk**: repeatedly writes and deletes a `NodeBenchmark:DiskSizeMegabytes` file (default 20 MB, real I/O via `WriteThrough` + `Flush(true)`) `NodeBenchmark:DiskRepetitions` times (default 5); score is MB/sec, from the median write time.
 
