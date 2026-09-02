@@ -251,5 +251,9 @@ namespace ScaleTrigger.Repositories
 
             return DbFailureKind.ConnectionFailure;
         }
+
+        /// <summary>SQLITE_BUSY (5) = the database file is locked by another connection's write, SQLITE_LOCKED (6) = a table is locked within the same connection's transaction handling - each connection here is short-lived and fresh (see CreateConnectionAsync), so this is contention between concurrent votes, not a stuck lock.</summary>
+        public bool IsTransientException(Exception ex) =>
+            ex is SqliteException sqliteEx && sqliteEx.SqliteErrorCode is 5 or 6;
     }
 }

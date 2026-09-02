@@ -249,5 +249,9 @@ namespace ScaleTrigger.Repositories
 
             return DbFailureKind.ConnectionFailure;
         }
+
+        /// <summary>40613 = database unavailable (serverless auto-pause/resuming or failover), 49918/49920 = not enough resources/too many requests (resource governor), 4060 = cannot open database (can also fire transiently during serverless resume), 1205 = chosen as the deadlock victim.</summary>
+        public bool IsTransientException(Exception ex) =>
+            ex is SqlException sqlEx && sqlEx.Number is 40613 or 49918 or 49920 or 4060 or 1205;
     }
 }

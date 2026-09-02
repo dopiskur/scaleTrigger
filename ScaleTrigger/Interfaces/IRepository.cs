@@ -31,5 +31,8 @@ namespace ScaleTrigger.Interfaces
 
         /// <summary>Inspects an exception caught from one of the methods above and says whether it looks like a missing schema (provider-specific "no such table/procedure" error) versus anything else (connection refused, auth failure, timeout, ...).</summary>
         DbFailureKind ClassifyException(Exception ex);
+
+        /// <summary>True for a provider-specific throttling/deadlock error worth retrying (e.g. Azure SQL resource governor, a deadlock victim, SQLite's database-is-locked) as opposed to a connection failure or missing schema that a retry won't fix. Load-generation tools that intentionally push a database toward its limits should expect these as a normal outcome, not treat the first one as fatal.</summary>
+        bool IsTransientException(Exception ex);
     }
 }

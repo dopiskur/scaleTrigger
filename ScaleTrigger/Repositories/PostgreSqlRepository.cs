@@ -209,5 +209,9 @@ namespace ScaleTrigger.Repositories
 
             return DbFailureKind.ConnectionFailure;
         }
+
+        /// <summary>40001 = serialization_failure, 40P01 = deadlock_detected - both resolve on retry once the competing transaction releases its lock.</summary>
+        public bool IsTransientException(Exception ex) =>
+            ex is PostgresException pgEx && pgEx.SqlState is "40001" or "40P01";
     }
 }

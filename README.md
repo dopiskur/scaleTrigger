@@ -125,6 +125,8 @@ Key settings:
 
 Four repository implementations exist, selected via `DatabaseProvider`: MSSQL, MySQL, PostgreSQL, and SQLite. SQLite is the odd one out: it has no stored procedure/function support, so its repository runs plain parameterized SQL directly instead of calling stored routines. Everything else (load simulation, auth, caching, the dashboard, dynamic `LoadConfig`) behaves identically regardless of provider.
 
+`GET /api/vote/report` and `GET /api/loadconfig` retry up to 3 times (exponential backoff, 200ms base) on a provider-specific throttling/deadlock error - Azure SQL 40613/49918/49920/4060, MySQL 1205/1213, PostgreSQL `40001`/`40P01`, SQLite's "database is locked" - since this tool deliberately pushes the database toward its limits (`DbCpuIterationsPerVote`, connection churn per vote), a throttled or deadlocked response is an expected outcome there, not a first-hit failure. `POST /api/vote/add` deliberately has no retry: without idempotency protection, retrying a write after a partial success would double-count a vote.
+
 ### Connecting to Azure SQL
 
 Two authentication modes, selected via `UseManagedIdentity`:

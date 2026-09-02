@@ -115,7 +115,7 @@ namespace ScaleTrigger.Controllers
             VoteReport report;
             try
             {
-                report = await repo.VoteReportGetAsync();
+                report = await DbRetryPolicy.ExecuteReadAsync(repo, () => repo.VoteReportGetAsync());
             }
             catch (Exception ex)
             {

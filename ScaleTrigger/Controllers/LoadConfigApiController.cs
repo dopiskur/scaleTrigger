@@ -39,7 +39,7 @@ namespace ScaleTrigger.Controllers
             var repo = repoFactory.GetRepo();
             try
             {
-                return Ok(await repo.LoadConfigGetAsync());
+                return Ok(await DbRetryPolicy.ExecuteReadAsync(repo, () => repo.LoadConfigGetAsync()));
             }
             catch (Exception ex)
             {

@@ -238,5 +238,9 @@ namespace ScaleTrigger.Repositories
 
             return DbFailureKind.ConnectionFailure;
         }
+
+        /// <summary>1205 = ER_LOCK_WAIT_TIMEOUT, 1213 = ER_LOCK_DEADLOCK - both resolve on retry once the competing transaction releases its lock.</summary>
+        public bool IsTransientException(Exception ex) =>
+            ex is MySqlException mysqlEx && mysqlEx.Number is 1205 or 1213;
     }
 }
