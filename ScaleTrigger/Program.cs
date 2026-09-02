@@ -12,6 +12,7 @@ using ScaleTrigger.Cache;
 using ScaleTrigger.HealthChecks;
 using ScaleTrigger.Interfaces;
 using ScaleTrigger.Middleware;
+using OpenTelemetry.Metrics;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
@@ -46,6 +47,16 @@ builder.Services.AddScoped<RepoFactory>();
 // App Service/K8s/Container Apps should stop routing traffic to a node that fails it.
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
+
+// /metrics (Prometheus text format): request duration/status/count from AddAspNetCoreInstrumentation
+// automatically, plus ScaleTriggerMetrics' custom gauge for votes currently in flight - the
+// concurrency signal MemoryLoadBudget's risk analysis has no visibility into otherwise.
+// Low risk if nothing scrapes it (Docker Compose/local dev): just an extra unused endpoint.
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddMeter(ScaleTriggerMetrics.MeterName)
+        .AddPrometheusExporter());
 
 if (builder.Configuration.GetValue<long?>("LoadSafety:MaxConcurrentMemoryBytes") is { } maxConcurrentMemoryBytes)
 {
@@ -175,6 +186,11 @@ var app = builder.Build();
     }
 }
 
+// Forces ScaleTriggerMetrics' static constructor (registers the active-vote-calls gauge) to run
+// now, before the OpenTelemetry Prometheus exporter's first collection - referencing only the
+// MeterName const above doesn't trigger it, since a const is inlined at compile time.
+_ = ScaleTriggerMetrics.Meter;
+
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseSerilogRequestLogging();
 
@@ -195,6 +211,8 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
+
+app.MapPrometheusScrapingEndpoint();
 
 app.MapControllers();
 

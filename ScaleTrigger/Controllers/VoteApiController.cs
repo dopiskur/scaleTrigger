@@ -43,61 +43,69 @@ namespace ScaleTrigger.Controllers
                 return Ok();
             }
 
-            int cpuIterations = RandomizedLoadValue("CpuIterationsPerVote");
-            int memoryKilobytes = RandomizedLoadValue("MemoryKilobytesPerVote");
-            int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
-            int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
-            int dbHashIterations = RandomizedLoadValue("DbCpuIterationsPerVote");
-
-            // Kestrel already dispatches request handlers on a ThreadPool thread (no
-            // SynchronizationContext to marshal back to, unlike classic ASP.NET), so running
-            // this CPU-bound work synchronously here uses the same pool a wrapping Task.Run
-            // would - the extra hop just added scheduling overhead without isolating anything.
-            LoadSimulator.SimulateCpuLoad(cpuIterations);
-            await LoadSimulator.SimulateMemoryLoadAsync(memoryKilobytes, ct);
-            await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
-            await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
-
-            var repo = repoFactory.GetRepo();
-            string databaseProvider = configuration["DatabaseProvider"] ?? "Sqlite";
-            var stopwatch = Stopwatch.StartNew();
-
+            ActiveVoteTracker.Enter();
             try
             {
-                if (dbCpuBurnOnly)
+                int cpuIterations = RandomizedLoadValue("CpuIterationsPerVote");
+                int memoryKilobytes = RandomizedLoadValue("MemoryKilobytesPerVote");
+                int diskWriteKilobytes = RandomizedLoadValue("DiskWriteKilobytesPerVote");
+                int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
+                int dbHashIterations = RandomizedLoadValue("DbCpuIterationsPerVote");
+
+                // Kestrel already dispatches request handlers on a ThreadPool thread (no
+                // SynchronizationContext to marshal back to, unlike classic ASP.NET), so running
+                // this CPU-bound work synchronously here uses the same pool a wrapping Task.Run
+                // would - the extra hop just added scheduling overhead without isolating anything.
+                LoadSimulator.SimulateCpuLoad(cpuIterations);
+                await LoadSimulator.SimulateMemoryLoadAsync(memoryKilobytes, ct);
+                await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
+                await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
+
+                var repo = repoFactory.GetRepo();
+                string databaseProvider = configuration["DatabaseProvider"] ?? "Sqlite";
+                var stopwatch = Stopwatch.StartNew();
+
+                try
                 {
-                    await repo.DbCpuBurnAsync(dbHashIterations);
+                    if (dbCpuBurnOnly)
+                    {
+                        await repo.DbCpuBurnAsync(dbHashIterations);
+                        logger.LogInformation(
+                            "VoteAdd (dbCpuBurnOnly) completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbCpuIterations={DbCpuIterations}).",
+                            stopwatch.ElapsedMilliseconds, databaseProvider, dbHashIterations);
+                        return Ok();
+                    }
+
+                    int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
+                    byte[]? payload = null;
+                    if (payloadBytes > 0)
+                    {
+                        payload = new byte[payloadBytes];
+                        Random.Shared.NextBytes(payload);
+                    }
+
+                    await repo.VoteAddAsync(option, payload, dbHashIterations);
                     logger.LogInformation(
-                        "VoteAdd (dbCpuBurnOnly) completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbCpuIterations={DbCpuIterations}).",
-                        stopwatch.ElapsedMilliseconds, databaseProvider, dbHashIterations);
-                    return Ok();
+                        "VoteAddAsync completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, PayloadBytes={PayloadBytes}, DbCpuIterations={DbCpuIterations}).",
+                        stopwatch.ElapsedMilliseconds, databaseProvider, payloadBytes, dbHashIterations);
                 }
-
-                int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
-                byte[]? payload = null;
-                if (payloadBytes > 0)
+                catch (Exception ex)
                 {
-                    payload = new byte[payloadBytes];
-                    Random.Shared.NextBytes(payload);
+                    var failureKind = repo.ClassifyException(ex);
+                    logger.LogWarning(ex,
+                        "VoteAdd failed after {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbFailureKind={DbFailureKind}).",
+                        stopwatch.ElapsedMilliseconds, databaseProvider, failureKind);
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(failureKind));
                 }
 
-                await repo.VoteAddAsync(option, payload, dbHashIterations);
-                logger.LogInformation(
-                    "VoteAddAsync completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, PayloadBytes={PayloadBytes}, DbCpuIterations={DbCpuIterations}).",
-                    stopwatch.ElapsedMilliseconds, databaseProvider, payloadBytes, dbHashIterations);
+                repoFactory.GetCache().RemoveItem(ReportCacheKey);
+
+                return Ok();
             }
-            catch (Exception ex)
+            finally
             {
-                var failureKind = repo.ClassifyException(ex);
-                logger.LogWarning(ex,
-                    "VoteAdd failed after {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbFailureKind={DbFailureKind}).",
-                    stopwatch.ElapsedMilliseconds, databaseProvider, failureKind);
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(failureKind));
+                ActiveVoteTracker.Exit();
             }
-
-            repoFactory.GetCache().RemoveItem(ReportCacheKey);
-
-            return Ok();
         }
 
         [HttpGet("report")]

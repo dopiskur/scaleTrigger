@@ -166,6 +166,7 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 | `POST /api/nodebenchmark/run` | optional | Runs a one-off CPU/memory/disk saturation benchmark on the current node (~20s by default) |
 | `GET /health/live` | anonymous | Always `200 Healthy` once the process is up - no dependency checks. Wire to a liveness/restart probe |
 | `GET /health/ready` | anonymous | `200 Healthy`/`503 Unhealthy` based on a live database round-trip. Wire to a readiness probe so a node that lost its DB connection stops receiving traffic |
+| `GET /metrics` | anonymous | Prometheus text format: HTTP request duration/status/count (automatic, via OpenTelemetry's ASP.NET Core instrumentation) plus `scaletrigger_vote_add_active_calls`, a gauge for how many `POST /api/vote/add` calls are in flight right now on this instance - the concurrency signal behind the `MemoryKilobytesPerVote` risk described above, otherwise unmeasured. Harmless if nothing scrapes it |
 
 ## Node benchmark: a fast load baseline
 
