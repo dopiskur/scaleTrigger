@@ -206,6 +206,8 @@ ScaleTrigger doesn't generate its own traffic; point one of these at it. All thr
 
 See the header comment in each script for usage examples and parameters.
 
+`scaleTriggerLoad.py` and `Run-ScalingScenarios.ps1` disable TLS certificate verification unconditionally, since they specifically target the VM/VMSS demo scenarios' self-signed certificate. `scaleTriggerLoad_k6.js` and `scaleTriggerLoad_locust.py` also run against App Service/Container Apps/AKS/Azure Load Testing, which serve a real certificate, so there it's opt-in: pass `-e INSECURE_TLS=true` (k6) or set the `INSECURE_TLS=true` environment variable (Locust) only when pointing at a VM/VMSS endpoint.
+
 While a load-test script drives the request rate, the `LoadConfig` dashboard/API drives what each request costs server-side; independent knobs, both adjustable during the same run.
 
 ## Deploying via GitHub Actions

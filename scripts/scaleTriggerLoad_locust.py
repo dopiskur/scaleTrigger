@@ -41,6 +41,17 @@ the observed request rate rather than assuming a 1:1 mapping.
 Environment variables:
 
     AUTH_USERNAME / AUTH_PASSWORD   Override the admin:admin default used for JWT login.
+    INSECURE_TLS                    true/false (default false) - skip TLS certificate
+                                     verification, for the self-signed cert the VM/VMSS demo
+                                     scenarios serve over HTTPS (scaleTriggerLoad.py and
+                                     Run-ScalingScenarios.ps1 handle the same certificate
+                                     unconditionally, since they target VM/VMSS specifically;
+                                     this script also runs against App Service/Container
+                                     Apps/AKS/Azure Load Testing with a real certificate, so
+                                     it's opt-in here instead - leave it false there).
+
+    INSECURE_TLS=true locust -f scaleTriggerLoad_locust.py \
+        --host https://vm-public-ip --users 200 --spawn-rate 10 --run-time 5m --headless
 """
 
 import os
@@ -50,6 +61,7 @@ from locust import HttpUser, task, between
 
 AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
 AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "admin")
+INSECURE_TLS = os.environ.get("INSECURE_TLS", "false").lower() == "true"
 
 
 class ScaleTriggerVoter(HttpUser):
@@ -60,6 +72,10 @@ class ScaleTriggerVoter(HttpUser):
 
     def on_start(self):
         """Probes once per user; logs in only if the API answers 401."""
+        if INSECURE_TLS:
+            # Set before the probe below, so the probe itself isn't rejected too.
+            self.client.verify = False
+
         probe = self.client.post("/api/vote/add?option=yes", name="/api/vote/add [probe]")
 
         if probe.status_code == 401:

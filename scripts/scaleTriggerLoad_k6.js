@@ -26,6 +26,10 @@
  *       -e RAMP=true -e RAMP_STEP=10 -e RAMP_INTERVAL=5 -e RAMP_MAX=500 \
  *       scaleTriggerLoad_k6.js
  *
+ *   # Against a VM/VMSS demo endpoint's self-signed cert
+ *   k6 run -e URL=https://vm-public-ip -e INSECURE_TLS=true \
+ *       -e VOTES=20 -e DURATION=60 scaleTriggerLoad_k6.js
+ *
  * Environment variables:
  *
  *   URL              (required) Base URL of the API, e.g. https://xyz.azurewebsites.net
@@ -43,6 +47,13 @@
  *   TIMEOUT          (default: 10s)   Max time to wait for a single request
  *   AUTH_USER        (default: admin) Username used to log in if the API requires auth
  *   AUTH_PASS        (default: admin) Password used to log in if the API requires auth
+ *   INSECURE_TLS     (default: false) true/false - skip TLS certificate verification, for the
+ *                                     self-signed cert the VM/VMSS demo scenarios serve over
+ *                                     HTTPS (scaleTriggerLoad.py and Run-ScalingScenarios.ps1
+ *                                     handle the same certificate unconditionally, since they
+ *                                     target VM/VMSS specifically; this script also runs against
+ *                                     App Service/Container Apps/AKS with a real certificate, so
+ *                                     it's opt-in here instead - leave it false there).
  *
  * Run with -e RAMP=false (or omit it) for a flat, fixed-rate run instead of a ramp.
  */
@@ -65,6 +76,7 @@ const MAX_VUS = Number(__ENV.MAX_VUS || 500);
 const TIMEOUT = __ENV.TIMEOUT || '10s';
 const AUTH_USER = __ENV.AUTH_USER || 'admin';
 const AUTH_PASS = __ENV.AUTH_PASS || 'admin';
+const INSECURE_TLS = (__ENV.INSECURE_TLS || 'false').toLowerCase() === 'true';
 
 // Builds k6 "stages" (target rate + duration pairs): every RAMP_INTERVAL_SECONDS the
 // rate grows by RAMP_STEP_PERCENT, capped at RAMP_MAX, until DURATION_SECONDS is covered.
@@ -92,6 +104,7 @@ function buildStages() {
 }
 
 export const options = {
+  insecureSkipTLSVerify: INSECURE_TLS,
   scenarios: {
     votes: {
       executor: 'ramping-arrival-rate',
