@@ -238,4 +238,69 @@ loadConfigSaveBtn.addEventListener('click', async () => {
   }
 });
 
+const loadConfigExportBtn = document.getElementById('loadconfig-export-btn');
+const loadConfigImportBtn = document.getElementById('loadconfig-import-btn');
+const loadConfigImportInput = document.getElementById('loadconfig-import-input');
+
+// Downloads the current, saved LoadConfig - not whatever's mid-edit in the fields above -
+// via the same GET the dashboard already uses to load it, so there's no separate serialization
+// to keep in sync with the API's shape.
+loadConfigExportBtn.addEventListener('click', async () => {
+  try {
+    loadConfigStatusEl.textContent = 'Exporting…';
+    const response = await fetchWithTimeout('/api/loadconfig', { cache: 'no-store' }, 5000);
+    if (!response.ok) {
+      throw new DbError(await dbErrorMessageFrom(response));
+    }
+    const settings = await response.json();
+
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'scaletrigger-loadconfig.json';
+    link.click();
+    URL.revokeObjectURL(url);
+
+    loadConfigStatusEl.textContent = 'Exported.';
+  } catch (err) {
+    loadConfigStatusEl.textContent = 'Export failed (' + err.message + ').';
+  }
+});
+
+loadConfigImportBtn.addEventListener('click', () => loadConfigImportInput.click());
+
+// Posts the file's content straight to the existing endpoint, so an imported profile goes
+// through the same SettingNames/MaxAllowedValues validation as a manual save - nothing here
+// re-implements or bypasses that.
+loadConfigImportInput.addEventListener('change', async () => {
+  const file = loadConfigImportInput.files[0];
+  loadConfigImportInput.value = ''; // clears the selection, so picking the same file again still fires "change"
+  if (!file) {
+    return;
+  }
+
+  try {
+    loadConfigStatusEl.textContent = 'Importing…';
+    const settings = JSON.parse(await file.text());
+    if (!Array.isArray(settings)) {
+      throw new Error('file does not contain a JSON array of settings');
+    }
+
+    const saveResponse = await fetchWithAuth('/api/loadconfig', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+    if (!saveResponse.ok) {
+      throw new Error('import failed (HTTP ' + saveResponse.status + ')');
+    }
+
+    loadConfigStatusEl.textContent = 'Imported. Takes effect within one poll interval.';
+    await loadLoadConfig();
+  } catch (err) {
+    loadConfigStatusEl.textContent = 'Import failed (' + err.message + ').';
+  }
+});
+
 loadLoadConfig();
