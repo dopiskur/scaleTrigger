@@ -139,7 +139,7 @@ function renderLoadSummary(settings) {
 // Application/Database fields below directly - there's nothing extra to wire up for it.
 const LOAD_PROFILE_PRESETS = {
   light: {
-    CpuIterationsPerVote: { min: 20000, max: 50000 },
+    CpuIterationsPerVote: { min: 1000, max: 2000 },
     MemoryKilobytesPerVote: { min: 0, max: 1024 },
     DiskWriteKilobytesPerVote: { min: 0, max: 64 },
     NetworkLatencyMillisecondsPerVote: { min: 0, max: 20 },
@@ -147,7 +147,7 @@ const LOAD_PROFILE_PRESETS = {
     DbCpuIterationsPerVote: { min: 0, max: 10 }
   },
   medium: {
-    CpuIterationsPerVote: { min: 100000, max: 300000 },
+    CpuIterationsPerVote: { min: 5000, max: 10000 },
     MemoryKilobytesPerVote: { min: 1024, max: 16384 },
     DiskWriteKilobytesPerVote: { min: 64, max: 512 },
     NetworkLatencyMillisecondsPerVote: { min: 20, max: 100 },
@@ -155,7 +155,7 @@ const LOAD_PROFILE_PRESETS = {
     DbCpuIterationsPerVote: { min: 10, max: 50 }
   },
   heavy: {
-    CpuIterationsPerVote: { min: 500000, max: 2000000 },
+    CpuIterationsPerVote: { min: 20000, max: 40000 },
     MemoryKilobytesPerVote: { min: 16384, max: 262144 },
     DiskWriteKilobytesPerVote: { min: 512, max: 8192 },
     NetworkLatencyMillisecondsPerVote: { min: 100, max: 500 },
