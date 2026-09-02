@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using ScaleTrigger;
@@ -64,6 +65,17 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddSingleton<IAuthorizationHandler, OptionalAuthorizationHandler>();
+
+// A generic 30-60s timeout would cut off legitimate heavy load configs: worst case, a single
+// vote can already add up to ~131s on its own (60s NetworkLatencyMillisecondsPerVote +
+// ~30s CpuIterationsPerVote at max + ~41s of memory-ramp delay at max MemoryKilobytesPerVote),
+// before DiskWriteKilobytesPerVote/DbCpuIterationsPerVote add anything. 300s gives that
+// legitimate worst case more than double the headroom while still failing a genuinely stuck
+// request (deadlock, network partition) instead of holding it open forever.
+builder.Services.AddRequestTimeouts(options =>
+{
+    options.DefaultPolicy = new RequestTimeoutPolicy { Timeout = TimeSpan.FromSeconds(300) };
+});
 
 // Per-IP throttle so credential-stuffing attempts against the single admin account don't lock out other clients.
 builder.Services.AddRateLimiter(options =>
@@ -129,6 +141,7 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+app.UseRequestTimeouts();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {

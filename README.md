@@ -112,6 +112,7 @@ Key settings:
 | `Startup:FailFastOnDbCheck` | `false` (default): log a critical error and keep running if the database is unreachable. `true`: refuse to start |
 | `Cache:SlidingExpirationMinutes` | Sliding expiration for the `GET /api/vote/report` cache entry, in minutes |
 | `LoadSafety:MaxConcurrentMemoryBytes` | Ceiling (bytes, default 2 GB) on total memory reserved by in-flight `MemoryKilobytesPerVote` allocations across all requests on this instance; see the `MemoryKilobytesPerVote` note above |
+| *(request timeout)* | Every request gets a fixed 300s server-side timeout (a 504 if exceeded), not configurable via `appsettings.json`. Deliberately well above a single vote's own legitimate worst case (~131s: 60s `NetworkLatencyMillisecondsPerVote` + ~30s `CpuIterationsPerVote` + ~41s of memory-ramp delay at max `MemoryKilobytesPerVote`, before `DiskWriteKilobytesPerVote`/`DbCpuIterationsPerVote` add anything), so it only cuts off a genuinely stuck request (deadlock, network partition), not a heavy load config |
 | `Load:*` | Seeds the initial `LoadConfig` values (see "How it works" above); after the first run, edit these live instead |
 | `Load:ConfigRefresh` | How often (seconds) a live edit to `Load:*` takes effect |
 | `Load:LoadEnabled` | `0`/`1`: master switch for per-vote load and the `Vote`/`Payload` write; see "Discard backlog" in the Dashboard section below |
