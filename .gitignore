@@ -37,3 +37,6 @@ deploy/azure-demo-resources/results/
 
 ## Local-only manual deploy path (dropped from the tracked repo, kept locally)
 deploy/azure-demo-resources/manual/
+
+## Serilog file sink output (ScaleTrigger/logs/scaletrigger-*.json)
+ScaleTrigger/logs/

@@ -127,6 +127,10 @@ Four repository implementations exist, selected via `DatabaseProvider`: MSSQL, M
 
 `GET /api/vote/report` and `GET /api/loadconfig` retry up to 3 times (exponential backoff, 200ms base) on a provider-specific throttling/deadlock error - Azure SQL 40613/49918/49920/4060, MySQL 1205/1213, PostgreSQL `40001`/`40P01`, SQLite's "database is locked" - since this tool deliberately pushes the database toward its limits (`DbCpuIterationsPerVote`, connection churn per vote), a throttled or deadlocked response is an expected outcome there, not a first-hit failure. `POST /api/vote/add` deliberately has no retry: without idempotency protection, retrying a write after a partial success would double-count a vote.
 
+### Logging
+
+Serilog replaces the default plain-text console logger, writing structured JSON to the console (scraped by App Service/Container Apps/K8s log pipelines) and to a rolling daily file under `ScaleTrigger/logs/` (a local, gitignored fallback). Every request carries an `X-Correlation-Id` - taken from the incoming request header if the client sends one, otherwise generated - echoed back on the response and attached to every log line written while handling that request, including the request-completion line and, on `POST /api/vote/add`, the write's duration/outcome. Useful for tying together the log entries from hundreds of concurrent votes under load, or for pulling every log line for one failed request.
+
 ### Connecting to Azure SQL
 
 Two authentication modes, selected via `UseManagedIdentity`:

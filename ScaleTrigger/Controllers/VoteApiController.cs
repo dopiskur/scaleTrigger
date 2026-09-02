@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ScaleTrigger.Models;
@@ -11,6 +12,7 @@ namespace ScaleTrigger.Controllers
         private readonly RepoFactory repoFactory;
         private readonly IConfiguration configuration;
         private readonly LoadConfigCache loadConfigCache;
+        private readonly ILogger<VoteApiController> logger;
 
         private const string ReportCacheKey = "VoteReportCache";
 
@@ -18,11 +20,12 @@ namespace ScaleTrigger.Controllers
         // piggy-back on one fetch instead of each hitting the database.
         private static readonly SemaphoreSlim ReportFetchLock = new(1, 1);
 
-        public VoteApiController(RepoFactory repoFactory, IConfiguration configuration, LoadConfigCache loadConfigCache)
+        public VoteApiController(RepoFactory repoFactory, IConfiguration configuration, LoadConfigCache loadConfigCache, ILogger<VoteApiController> logger)
         {
             this.repoFactory = repoFactory;
             this.configuration = configuration;
             this.loadConfigCache = loadConfigCache;
+            this.logger = logger;
         }
 
         /// <summary>CPU/memory/disk/network load runs here, in the app; PayloadBytesPerVote/DbCpuIterationsPerVote run inside the database instead (see IRepository.VoteAddAsync). dbCpuBurnOnly=true isolates the database-side CPU cost without inserting a row; LoadEnabled=false skips everything as a fast no-op, for the dashboard's "Discard backlog".</summary>
@@ -55,21 +58,43 @@ namespace ScaleTrigger.Controllers
             await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 
-            if (dbCpuBurnOnly)
+            var repo = repoFactory.GetRepo();
+            string databaseProvider = configuration["DatabaseProvider"] ?? "Sqlite";
+            var stopwatch = Stopwatch.StartNew();
+
+            try
             {
-                await repoFactory.GetRepo().DbCpuBurnAsync(dbHashIterations);
-                return Ok();
+                if (dbCpuBurnOnly)
+                {
+                    await repo.DbCpuBurnAsync(dbHashIterations);
+                    logger.LogInformation(
+                        "VoteAdd (dbCpuBurnOnly) completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbCpuIterations={DbCpuIterations}).",
+                        stopwatch.ElapsedMilliseconds, databaseProvider, dbHashIterations);
+                    return Ok();
+                }
+
+                int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
+                byte[]? payload = null;
+                if (payloadBytes > 0)
+                {
+                    payload = new byte[payloadBytes];
+                    Random.Shared.NextBytes(payload);
+                }
+
+                await repo.VoteAddAsync(option, payload, dbHashIterations);
+                logger.LogInformation(
+                    "VoteAddAsync completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, PayloadBytes={PayloadBytes}, DbCpuIterations={DbCpuIterations}).",
+                    stopwatch.ElapsedMilliseconds, databaseProvider, payloadBytes, dbHashIterations);
+            }
+            catch (Exception ex)
+            {
+                var failureKind = repo.ClassifyException(ex);
+                logger.LogWarning(ex,
+                    "VoteAdd failed after {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbFailureKind={DbFailureKind}).",
+                    stopwatch.ElapsedMilliseconds, databaseProvider, failureKind);
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(failureKind));
             }
 
-            int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
-            byte[]? payload = null;
-            if (payloadBytes > 0)
-            {
-                payload = new byte[payloadBytes];
-                Random.Shared.NextBytes(payload);
-            }
-
-            await repoFactory.GetRepo().VoteAddAsync(option, payload, dbHashIterations);
             repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
             return Ok();

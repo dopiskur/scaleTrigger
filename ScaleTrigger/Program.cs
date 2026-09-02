@@ -11,8 +11,23 @@ using ScaleTrigger.Auth;
 using ScaleTrigger.Cache;
 using ScaleTrigger.HealthChecks;
 using ScaleTrigger.Interfaces;
+using ScaleTrigger.Middleware;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Structured JSON logging in place of the plain-text console logger, so log entries (this
+// startup block included) are machine-parseable - console for local/dev and for any platform
+// that scrapes stdout (App Service, Container Apps, K8s), file as a durable local fallback.
+// Mirrors the previous "Logging:LogLevel" appsettings.json defaults (now superseded by this).
+builder.Host.UseSerilog((_, loggerConfig) => loggerConfig
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console(new JsonFormatter())
+    .WriteTo.File(new JsonFormatter(), Path.Combine(AppContext.BaseDirectory, "logs", "scaletrigger-.json"), rollingInterval: RollingInterval.Day));
 
 builder.Services.AddControllers();
 
@@ -159,6 +174,9 @@ var app = builder.Build();
         }
     }
 }
+
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
