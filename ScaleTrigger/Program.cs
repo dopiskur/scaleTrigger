@@ -93,6 +93,31 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Warns (doesn't block startup - this is a stress-test tool, not shipped software with a
+// release gate) if the placeholder Jwt:Key/AdminUser:Password from appsettings.json.example
+// are still in effect, since README already calls these out as needing to change before any
+// public exposure.
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("StartupCredentialCheck");
+
+    const string DefaultJwtKey = "abcdefghijklmnopqrstuvwxyz012345";
+    const string DefaultAdminPassword = "admin";
+
+    if (app.Configuration["Jwt:Key"] == DefaultJwtKey)
+    {
+        logger.LogWarning(
+            "Jwt:Key is still the placeholder value from appsettings.json.example. " +
+            "Replace it before exposing this instance publicly, especially with Auth:Enabled=true.");
+    }
+
+    if (app.Configuration["AdminUser:Password"] == DefaultAdminPassword)
+    {
+        logger.LogWarning(
+            "AdminUser:Password is still the default 'admin' from appsettings.json.example. " +
+            "Replace it before exposing this instance publicly, especially with Auth:Enabled=true.");
+    }
+}
+
 // Fails fast (or just warns) here instead of on the first real request - see "Startup:FailFastOnDbCheck".
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("StartupDbCheck");
