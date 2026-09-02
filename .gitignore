@@ -34,3 +34,6 @@ __pycache__/
 ## Run-ScalingScenarios.ps1 output (CSVs, HTML report, load logs, azcontext.json) -
 ## -Output has no fixed default, this covers the common case of a sibling "results" folder
 deploy/azure-demo-resources/results/
+
+## Local-only manual deploy path (dropped from the tracked repo, kept locally)
+deploy/azure-demo-resources/manual/
