@@ -28,7 +28,7 @@ namespace ScaleTrigger.Controllers
         /// <summary>CPU/memory/disk/network load runs here, in the app; PayloadBytesPerVote/DbCpuIterationsPerVote run inside the database instead (see IRepository.VoteAddAsync). dbCpuBurnOnly=true isolates the database-side CPU cost without inserting a row; LoadEnabled=false skips everything as a fast no-op, for the dashboard's "Discard backlog".</summary>
         [HttpPost("add")]
         [Authorize(Policy = "OptionalJwt")]
-        public async Task<ActionResult> VoteAdd([FromQuery] string option, [FromQuery] bool dbCpuBurnOnly = false)
+        public async Task<ActionResult> VoteAdd([FromQuery] string option, [FromQuery] bool dbCpuBurnOnly = false, CancellationToken ct = default)
         {
             if (option != "yes" && option != "no")
             {
@@ -51,9 +51,9 @@ namespace ScaleTrigger.Controllers
             await Task.Run(async () =>
             {
                 LoadSimulator.SimulateCpuLoad(cpuIterations);
-                LoadSimulator.SimulateMemoryLoad(memoryKilobytes);
+                await LoadSimulator.SimulateMemoryLoadAsync(memoryKilobytes, ct);
                 await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
-            });
+            }, ct);
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 
             if (dbCpuBurnOnly)

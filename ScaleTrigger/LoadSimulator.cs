@@ -45,27 +45,83 @@ namespace ScaleTrigger
             return buffer;
         }
 
-        public static void SimulateMemoryLoad(int kilobytes)
+        /// <summary>Tracks total bytes currently allocated by in-flight SimulateMemoryLoadAsync
+        /// calls on this instance, so a burst of concurrent requests can't collectively
+        /// exceed a configured ceiling even though no single request's Min/Max looks dangerous
+        /// on its own. Complementary to the per-request ramp below, not a replacement for it.</summary>
+        public static class MemoryLoadBudget
+        {
+            private static long currentlyAllocatedBytes;
+
+            public static long MaxConcurrentBytes { get; set; } = 2L * 1024 * 1024 * 1024;
+
+            public static bool TryReserve(long bytes)
+            {
+                long updated = Interlocked.Add(ref currentlyAllocatedBytes, bytes);
+                if (updated <= MaxConcurrentBytes)
+                {
+                    return true;
+                }
+
+                Interlocked.Add(ref currentlyAllocatedBytes, -bytes);
+                return false;
+            }
+
+            public static void Release(long bytes) => Interlocked.Add(ref currentlyAllocatedBytes, -bytes);
+        }
+
+        /// <summary>Allocates in chunks with a small delay between them instead of one large
+        /// synchronous allocation, so memory pressure ramps up visibly (same shape as CPU/network
+        /// load) instead of hitting the OS/cgroup memory limit as an instant spike that can trigger
+        /// an OOM-kill before autoscale metrics sample it. Reserves against MemoryLoadBudget first;
+        /// if the instance-wide ceiling is already spoken for, this component is skipped for this
+        /// vote while CPU/disk/network/DB load still run normally.</summary>
+        public static async Task SimulateMemoryLoadAsync(int kilobytes, CancellationToken ct = default)
         {
             if (kilobytes <= 0)
             {
                 return;
             }
 
-            long sizeInBytes = (long)kilobytes * 1024;
-            byte[] buffer = new byte[sizeInBytes];
+            const int chunkSizeBytes = 1_048_576; // 1 MB per chunk
+            const int delayPerChunkMs = 10;
 
-            Random.Shared.NextBytes(buffer);
+            long totalBytes = (long)kilobytes * 1024;
 
-            // Touch every page so the OS actually reserves physical memory, not just address space.
-            long checksum = 0;
-            for (int i = 0; i < buffer.Length; i += 4096)
+            if (!MemoryLoadBudget.TryReserve(totalBytes))
             {
-                checksum += buffer[i];
+                return;
             }
 
-            GC.KeepAlive(buffer);
-            GC.KeepAlive(checksum);
+            try
+            {
+                long remaining = totalBytes;
+                var chunks = new List<byte[]>();
+
+                while (remaining > 0)
+                {
+                    int thisChunk = (int)Math.Min(chunkSizeBytes, remaining);
+                    var buffer = new byte[thisChunk];
+                    Random.Shared.NextBytes(buffer); // touch pages so they're actually committed
+                    chunks.Add(buffer);
+                    remaining -= thisChunk;
+
+                    if (remaining > 0)
+                    {
+                        await Task.Delay(delayPerChunkMs, ct);
+                    }
+                }
+
+                GC.KeepAlive(chunks);
+            }
+            catch (OperationCanceledException)
+            {
+                // request timeout or shutdown mid-ramp - chunks already allocated get GC'd normally
+            }
+            finally
+            {
+                MemoryLoadBudget.Release(totalBytes);
+            }
         }
 
         /// <summary>Each call uses its own uniquely-named file so concurrent votes don't serialize on a shared one.</summary>

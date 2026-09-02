@@ -23,6 +23,11 @@ builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
 
 builder.Services.AddScoped<RepoFactory>();
 
+if (builder.Configuration.GetValue<long?>("LoadSafety:MaxConcurrentMemoryBytes") is { } maxConcurrentMemoryBytes)
+{
+    LoadSimulator.MemoryLoadBudget.MaxConcurrentBytes = maxConcurrentMemoryBytes;
+}
+
 string? jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKey))
 {

@@ -18,7 +18,7 @@ Every `POST /api/vote/add?option=yes|no` call:
 Every `POST /api/vote/add` call picks a fresh random value, per load type, from a `Min`/`Max` range. Unlike a value baked into `appsettings.json`, these ranges live in the `LoadConfig` database table and can be changed while the app is running and under test, with no restart or redeploy:
 
 - `CpuIterationsPerVote`: chained SHA-512 hashing in the app process (each hash's output feeds the next, so the JIT can't fold the loop away)
-- `MemoryKilobytesPerVote`: a buffer allocated and touched page-by-page so the OS actually reserves physical memory, not just address space
+- `MemoryKilobytesPerVote`: allocated in 1 MB chunks with a small delay between them (a visible ramp, touched page-by-page so the OS actually reserves physical memory, not just address space) instead of one synchronous allocation. The real OOM-kill risk isn't this setting's `Max` in isolation - it's **concurrency × randomized size per request**: dozens of parallel votes can each draw a high value at once and the sum can overrun the instance regardless of how large that instance is. `LoadSafety:MaxConcurrentMemoryBytes` (`appsettings.json`, default 2 GB) caps the total bytes reserved by in-flight allocations across all requests on the instance; once a burst hits that ceiling, additional votes just skip their memory component (CPU/disk/network/DB load still runs) instead of piling on. Set it below the instance's actual RAM (e.g. 5-6 GB on an 8 GB instance) to leave headroom for the OS/GC/other requests
 - `DiskWriteKilobytesPerVote`: a uniquely-named temp file per call, written with `FileOptions.WriteThrough` + `Flush(true)` (real disk I/O, not page cache) then deleted immediately
 - `NetworkLatencyMillisecondsPerVote`: a non-blocking `Task.Delay`, so it frees the request thread the way a real downstream call would
 - `PayloadBytesPerVote`: optional extra random bytes written into a `Payload` table row (off by default, since unlike the others this permanently grows the database; opt in for write-throughput benchmarking)
@@ -111,6 +111,7 @@ Key settings:
 | `Auth:Enabled` | `false` (default): `POST /api/vote/add` and other admin actions need no token. `true`: they require a JWT from `POST /api/auth/login` |
 | `Startup:FailFastOnDbCheck` | `false` (default): log a critical error and keep running if the database is unreachable. `true`: refuse to start |
 | `Cache:SlidingExpirationMinutes` | Sliding expiration for the `GET /api/vote/report` cache entry, in minutes |
+| `LoadSafety:MaxConcurrentMemoryBytes` | Ceiling (bytes, default 2 GB) on total memory reserved by in-flight `MemoryKilobytesPerVote` allocations across all requests on this instance; see the `MemoryKilobytesPerVote` note above |
 | `Load:*` | Seeds the initial `LoadConfig` values (see "How it works" above); after the first run, edit these live instead |
 | `Load:ConfigRefresh` | How often (seconds) a live edit to `Load:*` takes effect |
 | `Load:LoadEnabled` | `0`/`1`: master switch for per-vote load and the `Vote`/`Payload` write; see "Discard backlog" in the Dashboard section below |

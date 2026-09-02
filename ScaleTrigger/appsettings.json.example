@@ -35,6 +35,11 @@
     "SlidingExpirationMinutes": 5
   },
 
+  "LoadSafety": {
+    "// MaxConcurrentMemoryBytes": "Ceiling on total bytes concurrently reserved by in-flight MemoryKilobytesPerVote allocations across all requests on this instance. A burst of parallel votes stops adding new memory load once the ceiling is hit (that vote's CPU/disk/network/DB load still runs normally) instead of the sum overrunning available RAM and triggering an OOM-kill. Set below the instance's actual RAM (e.g. 5-6 GB on an 8 GB instance) to leave headroom for the OS/GC/other requests.",
+    "MaxConcurrentMemoryBytes": 2147483648
+  },
+
   "Load": {
     "// Note": "Seeds LoadConfig only the first time it's created; edit live values from the dashboard afterward. Each vote picks fresh, at random, between Min and Max (Min == Max for a fixed value).",
     "// ConfigRefresh": "Seconds between polls of LoadConfig for dashboard edits; controls how fast a change to any setting below takes effect.",
