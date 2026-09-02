@@ -19,7 +19,7 @@ Radi konteksta, kratak pregled onoga što **više nije potrebno raditi**, jer je
 - `wwwroot/index.html` rastavljen na `css/dashboard.css` + 7 JS modula (`auth.js`, `benchmark.js`, `latency.js`, `loadconfig.js`, `main.js`, `report.js`, `shared.js`)
 - Load profile presets (Light/Medium/Heavy) u `loadconfig.js`
 - Export/Import `LoadConfig` kao JSON
-- "Currently: ..." summary red na dashboardu (trenutni efektivni load)
+- ~~"Currently: ..." summary red na dashboardu (trenutni efektivni load)~~ — uklonjeno 2026-09-02 na korisnički zahtjev (dashboard tekst procijenjen kao suvišan)
 - `INSECURE_TLS` env varijabla u `scaleTriggerLoad_k6.js` i `scaleTriggerLoad_locust.py`
 - Dokumentacijske korekcije u `README.md` i `deploy/azure-demo-resources/README.md` (probe-vote napomena, TLS napomena, dijeljena lozinka napomena)
 - **Testcontainers-backed integracijski testovi za MySQL/PostgreSQL** (commit `cbd91ba`) — `ProviderIntegrationTestsBase<TFactory>` dijeljena baza, `MySqlScaleTriggerApplicationFactory`/`PostgreSqlScaleTriggerApplicationFactory`, jedan container po test klasi. Ovo je usput otkrilo i popravilo pravi produkcijski bug: `PostgreSqlRepository.EnsureSchemaAsync`/`LoadConfigEnsureSeededAsync` su bacali `InvalidCastException` na `SELECT to_regclass(...)` protiv Npgsql 10.x (regclass OID tip se više ne mapira automatski) — `DatabaseProvider: PostgreSql` protiv svježe baze nikad nije radio dok ovaj test nije napisan. Popravljeno s `::text` castom na oba mjesta. 28/28 testova prolazi (18 SQLite + 5 MySQL + 5 PostgreSQL).
