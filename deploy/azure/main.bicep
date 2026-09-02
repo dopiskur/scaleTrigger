@@ -8,10 +8,10 @@ targetScope = 'subscription'
 @description('Resource group to deploy into - created automatically if it does not already exist, reused as-is if it does.')
 param resourceGroupName string = 'ScaleTrigger'
 
-@description('Name of the App Service (must be globally unique - becomes <name>.azurewebsites.net).')
+@description('Name of the App Service (must be globally unique across all of Azure - becomes <name>.azurewebsites.net). Defaults to "scaletrigger-<random>" instead of a bare "scaletrigger", since that alone is almost certainly already taken by someone else\'s App Service.')
 @minLength(2)
 @maxLength(60)
-param appServiceName string = 'ScaleTrigger'
+param appServiceName string = 'scaletrigger-${uniqueString(subscription().subscriptionId, resourceGroupName)}'
 
 @description('Azure region for all resources.')
 param location string = deployment().location

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "15345292636754118733"
+      "templateHash": "3522778040766801838"
     }
   },
   "parameters": {
@@ -18,11 +18,11 @@
     },
     "appServiceName": {
       "type": "string",
-      "defaultValue": "ScaleTrigger",
+      "defaultValue": "[format('scaletrigger-{0}', uniqueString(subscription().subscriptionId, parameters('resourceGroupName')))]",
       "minLength": 2,
       "maxLength": 60,
       "metadata": {
-        "description": "Name of the App Service (must be globally unique - becomes <name>.azurewebsites.net)."
+        "description": "Name of the App Service (must be globally unique across all of Azure - becomes <name>.azurewebsites.net). Defaults to \"scaletrigger-<random>\" instead of a bare \"scaletrigger\", since that alone is almost certainly already taken by someone else's App Service."
       }
     },
     "location": {
