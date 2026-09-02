@@ -31,7 +31,7 @@ body {
 }
 
 .viz-root {
-  max-width: 1280px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 32px 20px 40px;
 }
@@ -43,48 +43,17 @@ h1 {
   color: var(--text-primary);
 }
 
-/* Votes / Request latency / Node benchmark, side by side instead of stacked - each is
-   short enough on its own that stacking them wasted the page's full width and pushed
-   Configuration (the genuinely tall card) further down the page than it needed to be. */
-.top-row {
+.dashboard-columns {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  align-items: start;
-  gap: 24px;
-  margin-bottom: 24px;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  gap: 32px;
 }
 
-.top-row > .card + .card {
-  margin-top: 0;
-}
-
-@media (max-width: 900px) {
-  .top-row {
+@media (max-width: 760px) {
+  .dashboard-columns {
     grid-template-columns: 1fr;
   }
-}
-
-/* Application/Database settings side by side instead of stacked, since they're the same
-   shape (Setting/Min/Max) and together make up most of Configuration's height. Collapses
-   to one column on its own, with no extra breakpoint needed, once neither would fit at
-   least 240px. */
-.config-columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
-}
-
-.config-columns > .config-group {
-  min-width: 0;
-}
-
-.config-columns > .config-group + .config-group {
-  margin-top: 0;
-}
-
-.config-group + .config-columns,
-.config-columns + .config-group {
-  margin-top: 20px;
 }
 
 .card {
@@ -92,11 +61,6 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
-  /* Defensive: grid items default to min-width: auto (their content's intrinsic minimum),
-     so without this a number input's own non-zero intrinsic minimum width could in
-     principle force this card - and every other card sharing its .top-row track - wider
-     than intended at narrow viewports instead of shrinking normally. */
-  min-width: 0;
 }
 
 .card + .card {
@@ -245,10 +209,6 @@ h1 {
 
 .loadconfig-input {
   width: 100%;
-  /* Defensive, same reasoning as .card above: <input> has a non-zero intrinsic minimum
-     width regardless of width: 100%, which a fixed-width grid column would otherwise
-     report upward as its content's floor instead of the 90px it actually renders at. */
-  min-width: 0;
   font-family: inherit;
   font-size: 13px;
   color: var(--text-primary);
