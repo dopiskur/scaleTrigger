@@ -6,10 +6,11 @@ namespace ScaleTrigger.Tests
 {
     /// <summary>Shared test bodies for any real (non-Sqlite) provider, run once per concrete
     /// subclass against that subclass's own container-backed factory - see
-    /// MySqlIntegrationTests/PostgreSqlIntegrationTests. Exercises exactly what Sqlite can't:
-    /// schema provisioning and every VoteAdd/VoteReportGet/LoadConfig call going through that
-    /// engine's real stored procedures/functions (SchemaScripts.MySql/PostgreSql), not the plain
-    /// SQL SqliteRepository runs instead. Requires Docker.</summary>
+    /// MsSqlIntegrationTests/MySqlIntegrationTests/PostgreSqlIntegrationTests. Exercises exactly
+    /// what Sqlite can't: schema provisioning and every VoteAdd/VoteReportGet/LoadConfig call
+    /// going through that engine's real stored procedures/functions
+    /// (SchemaScripts.MsSql/MySql/PostgreSql), not the plain SQL SqliteRepository runs instead.
+    /// Requires Docker.</summary>
     public abstract class ProviderIntegrationTestsBase<TFactory> : IClassFixture<TFactory>
         where TFactory : ScaleTriggerApplicationFactory
     {
@@ -81,6 +82,13 @@ namespace ScaleTrigger.Tests
 
             var settings = await client.GetFromJsonAsync<List<LoadConfigSetting>>("/api/loadconfig");
             Assert.Equal(9, settings?.Count);
+        }
+    }
+
+    public class MsSqlIntegrationTests : ProviderIntegrationTestsBase<MsSqlScaleTriggerApplicationFactory>
+    {
+        public MsSqlIntegrationTests(MsSqlScaleTriggerApplicationFactory factory) : base(factory)
+        {
         }
     }
 
