@@ -6,6 +6,8 @@ A REST API for testing autoscale triggers on the app tier (Azure App Service, Co
 
 The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 10 SDK is required.
 
+**Primary use cases:** demos and training sessions (MCT / Azure training), personal/internal experimentation, and proving/documenting autoscale behavior.
+
 ## How it works
 
 Every `POST /api/vote/add?option=yes|no` call:
