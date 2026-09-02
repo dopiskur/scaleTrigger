@@ -105,6 +105,67 @@ function renderLoadConfig(settings) {
   }
 }
 
+// Deliberately well under both each setting's own Max ceiling (LoadConfigApiController's
+// MaxAllowedValues) and LoadSafety:MaxConcurrentMemoryBytes's default 2 GB budget - "Heavy"
+// should still be a safe, repeatable demo setting, not a value that risks an OOM-kill or a
+// wall of skipped memory components under concurrent load. "Custom" is just editing the
+// Application/Database fields below directly - there's nothing extra to wire up for it.
+const LOAD_PROFILE_PRESETS = {
+  light: {
+    CpuIterationsPerVote: { min: 20000, max: 50000 },
+    MemoryKilobytesPerVote: { min: 0, max: 1024 },
+    DiskWriteKilobytesPerVote: { min: 0, max: 64 },
+    NetworkLatencyMillisecondsPerVote: { min: 0, max: 20 },
+    PayloadBytesPerVote: { min: 0, max: 0 },
+    DbCpuIterationsPerVote: { min: 0, max: 10 }
+  },
+  medium: {
+    CpuIterationsPerVote: { min: 100000, max: 300000 },
+    MemoryKilobytesPerVote: { min: 1024, max: 16384 },
+    DiskWriteKilobytesPerVote: { min: 64, max: 512 },
+    NetworkLatencyMillisecondsPerVote: { min: 20, max: 100 },
+    PayloadBytesPerVote: { min: 0, max: 1024 },
+    DbCpuIterationsPerVote: { min: 10, max: 50 }
+  },
+  heavy: {
+    CpuIterationsPerVote: { min: 500000, max: 2000000 },
+    MemoryKilobytesPerVote: { min: 16384, max: 262144 },
+    DiskWriteKilobytesPerVote: { min: 512, max: 8192 },
+    NetworkLatencyMillisecondsPerVote: { min: 100, max: 500 },
+    PayloadBytesPerVote: { min: 1024, max: 8192 },
+    DbCpuIterationsPerVote: { min: 50, max: 200 }
+  }
+};
+
+const presetStatusEl = document.getElementById('preset-status');
+
+function findLoadConfigRow(settingName) {
+  return loadConfigRowsEls.application.querySelector(`[data-setting-name="${settingName}"]`)
+    || loadConfigRowsEls.database.querySelector(`[data-setting-name="${settingName}"]`);
+}
+
+function applyPreset(presetName) {
+  let allFound = true;
+
+  for (const [settingName, { min, max }] of Object.entries(LOAD_PROFILE_PRESETS[presetName])) {
+    const row = findLoadConfigRow(settingName);
+    if (!row) {
+      allFound = false;
+      continue;
+    }
+    row.querySelector('[data-field="min"]').value = min;
+    row.querySelector('[data-field="max"]').value = max;
+  }
+
+  presetStatusEl.textContent = allFound
+    ? 'Preset applied - click "Save changes" below to persist.'
+    : 'LoadConfig not fully loaded yet - try again in a moment.';
+}
+
+for (const presetName of Object.keys(LOAD_PROFILE_PRESETS)) {
+  document.getElementById(`preset-${presetName}-btn`).addEventListener('click', () => applyPreset(presetName));
+}
+
 let loadConfigCallId = 0;
 
 export async function loadLoadConfig() {
