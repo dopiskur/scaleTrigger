@@ -7,10 +7,10 @@
  * request. Uses k6's ramping-arrival-rate executor, which targets a fixed
  * number of requests per second regardless of how many VUs that takes.
  *
- * Authentication is auto-detected: setup() sends a single probe vote
- * before the test starts, and if the API responds 401, logs in with
- * admin:admin (override via AUTH_USER / AUTH_PASS) and every VU attaches
- * the resulting JWT as a Bearer token.
+ * Authentication is auto-detected: setup() checks GET /api/auth/status
+ * before the test starts, and if it reports authRequired=true, logs in
+ * with admin:admin (override via AUTH_USER / AUTH_PASS) and every VU
+ * attaches the resulting JWT as a Bearer token.
  *
  * Install k6: https://k6.io/docs/get-started/installation/
  *
@@ -122,9 +122,9 @@ export const options = {
 };
 
 export function setup() {
-  const probe = http.post(`${BASE_URL}/api/vote/add?option=yes`, null, { timeout: TIMEOUT });
+  const status = http.get(`${BASE_URL}/api/auth/status`, { timeout: TIMEOUT });
 
-  if (probe.status !== 401) {
+  if (status.json('authRequired') !== true) {
     return { token: '' };
   }
 

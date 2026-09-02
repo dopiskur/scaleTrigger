@@ -8,11 +8,11 @@ Sends POST /api/vote/add?option=yes|no to a real, external URL, randomly
 choosing yes/no per request. Supports several parallel processes so a
 single process's GIL/network overhead doesn't cap the achievable rate.
 
-Authentication is auto-detected: a probe vote with no Authorization header
-is sent first, and if the API responds 401, the script logs in and attaches
-the resulting JWT to every subsequent request. Defaults to admin:admin;
-pass --username/--password if the target was deployed with different
-credentials (e.g. any azure-demo-resources scenario).
+Authentication is auto-detected: GET /api/auth/status is checked first, and
+if it reports authRequired=true, the script logs in and attaches the
+resulting JWT to every subsequent request. Defaults to admin:admin; pass
+--username/--password if the target was deployed with different credentials
+(e.g. any azure-demo-resources scenario).
 
 Ramp-up mode (--ramp true): --votes becomes the starting rate, increasing
 by --ramp-step percent every --ramp-interval seconds for the rest of the
@@ -76,10 +76,10 @@ Parameters:
         (aiohttp's default is 300s, which would hold a concurrency slot too long).
 
     --username                               (optional, default: admin)
-        Login used if the API requires authentication (401 on probe).
+        Login used if the API requires authentication (GET /api/auth/status).
 
     --password                               (optional, default: admin)
-        Password used if the API requires authentication (401 on probe).
+        Password used if the API requires authentication (GET /api/auth/status).
 """
 
 import subprocess
@@ -202,13 +202,13 @@ async def fetch_jwt_token(api_url: str, username: str, password: str, timeout_se
 
 
 async def probe_requires_auth(api_url: str, timeout_seconds: float) -> bool:
-    """Detects Auth:Enabled via a single unauthenticated probe. If the probe fails outright, assumes no auth and lets the real load test surface the problem."""
+    """Detects Auth:Enabled via GET /api/auth/status - side-effect-free, unlike the old probe vote. If the check fails outright, assumes no auth and lets the real load test surface the problem."""
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     async with _new_client_session(timeout) as session:
         try:
-            async with session.post(f"{api_url}/api/vote/add", params={"option": "yes"}) as resp:
-                await resp.read()
-                return resp.status == 401
+            async with session.get(f"{api_url}/api/auth/status") as resp:
+                data = await resp.json()
+                return bool(data.get("authRequired", False))
         except Exception:
             return False
 
@@ -262,6 +262,7 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
     since every process shares the same schedule shape.
     """
     semaphore = asyncio.Semaphore(max_in_flight_requests)
+    in_flight = 0
     start_time = time.perf_counter()
     end_time = start_time + duration_seconds
 
@@ -277,9 +278,12 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
     async with _new_client_session(timeout, limit=max_in_flight_requests + 10) as session:
 
         async def release_after_send(option: str):
+            nonlocal in_flight
+            in_flight += 1
             try:
                 await send_vote_request(session, api_url, option, headers, stats)
             finally:
+                in_flight -= 1
                 semaphore.release()
 
         next_tick = time.perf_counter()
@@ -320,7 +324,7 @@ async def generate_votes(api_url: str, votes_per_second: float, duration_seconds
 
         # wait for remaining in-flight requests to drain
         await asyncio.sleep(0.5)
-        while semaphore._value < max_in_flight_requests:  # noqa: SLF001
+        while in_flight > 0:
             await asyncio.sleep(0.1)
 
 

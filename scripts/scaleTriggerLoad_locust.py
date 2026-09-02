@@ -7,10 +7,11 @@ Sends POST /api/vote/add?option=yes|no, randomly choosing yes/no per
 request. Works both for local runs (`locust -f ...`) and as a direct
 upload to Azure Load Testing, which runs Locust scripts natively.
 
-Authentication is auto-detected per simulated user via on_start(): a
-probe vote is sent first, and if the API responds 401, the user logs in
-with admin:admin (override via AUTH_USERNAME/AUTH_PASSWORD) and attaches
-the resulting JWT to every subsequent vote.
+Authentication is auto-detected per simulated user via on_start(): GET
+/api/auth/status is checked first, and if it reports authRequired=true,
+the user logs in with admin:admin (override via
+AUTH_USERNAME/AUTH_PASSWORD) and attaches the resulting JWT to every
+subsequent vote.
 
 Running locally (web UI):
 
@@ -71,14 +72,13 @@ class ScaleTriggerVoter(HttpUser):
     token = None
 
     def on_start(self):
-        """Probes once per user; logs in only if the API answers 401."""
+        """Checks auth status once per user; logs in only if the API requires it."""
         if INSECURE_TLS:
-            # Set before the probe below, so the probe itself isn't rejected too.
             self.client.verify = False
 
-        probe = self.client.post("/api/vote/add?option=yes", name="/api/vote/add [probe]")
+        status = self.client.get("/api/auth/status", name="/api/auth/status")
 
-        if probe.status_code == 401:
+        if status.json().get("authRequired"):
             login = self.client.post(
                 "/api/auth/login",
                 json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ScaleTrigger.Auth;
@@ -21,6 +22,15 @@ namespace ScaleTrigger.Controllers
         {
             public string Username { get; set; } = string.Empty;
             public string Password { get; set; } = string.Empty;
+        }
+
+        /// <summary>Lets load-test scripts detect Auth:Enabled without a side-effecting probe vote.</summary>
+        [HttpGet("status")]
+        [AllowAnonymous]
+        public ActionResult<object> Status()
+        {
+            bool authRequired = bool.TryParse(configuration["Auth:Enabled"], out bool enabled) && enabled;
+            return Ok(new { authRequired });
         }
 
         [HttpPost("login")]
