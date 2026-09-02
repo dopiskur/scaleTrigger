@@ -157,6 +157,8 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 | `POST /api/loadconfig` | optional | Updates one or more `Load:*` ranges live, see "How it works" |
 | `GET /api/nodebenchmark/hardware` | anonymous | Detects the hosting environment (Azure App Service/Container Apps, AWS ECS/EC2, Kubernetes, generic Docker, bare metal) and reports CPU/memory/disk |
 | `POST /api/nodebenchmark/run` | optional | Runs a one-off CPU/memory/disk saturation benchmark on the current node (~20s by default) |
+| `GET /health/live` | anonymous | Always `200 Healthy` once the process is up - no dependency checks. Wire to a liveness/restart probe |
+| `GET /health/ready` | anonymous | `200 Healthy`/`503 Unhealthy` based on a live database round-trip. Wire to a readiness probe so a node that lost its DB connection stops receiving traffic |
 
 ## Node benchmark: a fast load baseline
 

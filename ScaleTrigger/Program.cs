@@ -2,11 +2,13 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using ScaleTrigger;
 using ScaleTrigger.Auth;
 using ScaleTrigger.Cache;
+using ScaleTrigger.HealthChecks;
 using ScaleTrigger.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +24,12 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ICache, MemoryCacheRepository>();
 
 builder.Services.AddScoped<RepoFactory>();
+
+// /health/live has no checks (predicate false below) - it only confirms the process is up and
+// accepting requests. /health/ready gates on "ready"-tagged checks (the database round-trip) -
+// App Service/K8s/Container Apps should stop routing traffic to a node that fails it.
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
 
 if (builder.Configuration.GetValue<long?>("LoadSafety:MaxConcurrentMemoryBytes") is { } maxConcurrentMemoryBytes)
 {
@@ -121,6 +129,16 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.MapControllers();
 
