@@ -161,6 +161,41 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.latency-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.latency-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.latency-bar-track {
+  background: var(--page-plane);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.latency-bar {
+  background: var(--accent);
+  height: 100%;
+}
+
+.latency-count {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .loadconfig-label {
   font-size: 13px;
   color: var(--text-primary);

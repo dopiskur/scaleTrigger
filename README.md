@@ -166,7 +166,7 @@ A "vote" is just the load-generation unit: each call is a fake yes/no choice tha
 | `POST /api/nodebenchmark/run` | optional | Runs a one-off CPU/memory/disk saturation benchmark on the current node (~20s by default) |
 | `GET /health/live` | anonymous | Always `200 Healthy` once the process is up - no dependency checks. Wire to a liveness/restart probe |
 | `GET /health/ready` | anonymous | `200 Healthy`/`503 Unhealthy` based on a live database round-trip. Wire to a readiness probe so a node that lost its DB connection stops receiving traffic |
-| `GET /metrics` | anonymous | Prometheus text format: HTTP request duration/status/count (automatic, via OpenTelemetry's ASP.NET Core instrumentation) plus `scaletrigger_vote_add_active_calls`, a gauge for how many `POST /api/vote/add` calls are in flight right now on this instance - the concurrency signal behind the `MemoryKilobytesPerVote` risk described above, otherwise unmeasured. Harmless if nothing scrapes it |
+| `GET /metrics` | anonymous | Prometheus text format: HTTP request duration/status/count (automatic, via OpenTelemetry's ASP.NET Core instrumentation) plus `scaletrigger_vote_add_active_calls`, a gauge for how many `POST /api/vote/add` calls are in flight right now on this instance - the concurrency signal behind the `MemoryKilobytesPerVote` risk described above, otherwise unmeasured. Also polled by the dashboard's own "Request latency" card, in addition to whatever external Prometheus/Grafana setup scrapes it |
 
 ## Node benchmark: a fast load baseline
 
@@ -183,6 +183,8 @@ The dashboard's "Run benchmark" button uses the CPU score specifically to sugges
 ## Dashboard
 
 A small static dashboard is served at the application's root URL (`ScaleTrigger/wwwroot/index.html`); no separate frontend project. It shows the live total vote count and payload stats (polling `GET /api/vote/report`), lets you turn the `LoadConfig` ranges up or down while traffic is running, and can trigger the node hardware benchmark. Loading the dashboard itself needs no login, but with `Auth:Enabled = true` its admin actions (saving `LoadConfig` changes, resetting the schema, running the benchmark) prompt for one on the first `401`, same as calling those endpoints directly.
+
+A "Request latency" card renders `POST /api/vote/add`'s latency distribution as a bar chart, polled from `GET /metrics` every 5s (parsing the Prometheus text format client-side, no new backend endpoint) - the buckets are OpenTelemetry's own default boundaries (5ms to 10s), and the count in each is that bucket's cumulative value minus the previous bucket's, so the bars show requests actually falling in that range, not "at or under" it.
 
 A one-line summary above the Configuration table ("Currently: CPU 20,000–100,000 SHA-512 iterations · Memory 1,024–4,096 KB · ...") shows what's actually in effect for the *next* vote - as opposed to the Votes card, which shows the result of load already applied. Reads the same `GET /api/loadconfig` response the table below it renders from, no extra API call, and refreshes after any save/import/preset/reset.
 
