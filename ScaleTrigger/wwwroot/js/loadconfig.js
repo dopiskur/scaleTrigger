@@ -105,6 +105,33 @@ function renderLoadConfig(settings) {
   }
 }
 
+const loadSummaryEl = document.getElementById('loadconfig-summary');
+
+// CpuIterationsPerVote and DbCpuIterationsPerVote share the table label "CPU" - fine there,
+// since "Application" vs "Database" section headers disambiguate them; this flat one-line
+// summary has no such grouping, so DB CPU gets a distinct label here only.
+const SUMMARY_LABEL_OVERRIDES = { DbCpuIterationsPerVote: 'DB CPU' };
+
+function formatSettingRange(setting, info) {
+  const label = SUMMARY_LABEL_OVERRIDES[setting.settingName] ?? info.label;
+  const unit = info.unit ? ' ' + info.unit : '';
+  const range = setting.min === setting.max
+    ? setting.min.toLocaleString()
+    : setting.min.toLocaleString() + '–' + setting.max.toLocaleString();
+  return label + ' ' + range + unit;
+}
+
+// What's actually in effect for the *next* vote - as opposed to the Votes card, which shows
+// the result of load already applied. Reads the same settings renderLoadConfig() just rendered,
+// no separate API call.
+function renderLoadSummary(settings) {
+  const ordered = settings
+    .filter(s => LOAD_CONFIG_LABELS[s.settingName]?.group === 'application' || LOAD_CONFIG_LABELS[s.settingName]?.group === 'database')
+    .sort((a, b) => LOAD_CONFIG_LABELS[a.settingName].order - LOAD_CONFIG_LABELS[b.settingName].order);
+
+  loadSummaryEl.textContent = 'Currently: ' + ordered.map(s => formatSettingRange(s, LOAD_CONFIG_LABELS[s.settingName])).join(' · ');
+}
+
 // Deliberately well under both each setting's own Max ceiling (LoadConfigApiController's
 // MaxAllowedValues) and LoadSafety:MaxConcurrentMemoryBytes's default 2 GB budget - "Heavy"
 // should still be a safe, repeatable demo setting, not a value that risks an OOM-kill or a
@@ -180,6 +207,7 @@ export async function loadLoadConfig() {
       return;
     }
     renderLoadConfig(settings);
+    renderLoadSummary(settings);
     clearDbUnavailableIfShown();
     loadConfigNeedsRetry = false;
   } catch (err) {
@@ -233,6 +261,7 @@ loadConfigSaveBtn.addEventListener('click', async () => {
     }
 
     loadConfigStatusEl.textContent = 'Saved. Takes effect within one poll interval.';
+    renderLoadSummary(settings);
   } catch (err) {
     loadConfigStatusEl.textContent = 'Save failed (' + err.message + ').';
   }
