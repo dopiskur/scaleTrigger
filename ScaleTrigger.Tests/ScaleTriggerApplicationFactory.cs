@@ -15,6 +15,16 @@ namespace ScaleTrigger.Tests
 
         protected virtual bool AuthEnabled => false;
 
+        /// <summary>Override point for a provider-specific subclass (see
+        /// MySqlScaleTriggerApplicationFactory/PostgreSqlScaleTriggerApplicationFactory) - must
+        /// stay readable when ConfigureWebHost runs, i.e. after any container the value depends
+        /// on has already started (IAsyncLifetime.InitializeAsync, not the constructor).</summary>
+        protected virtual string DatabaseProvider => "Sqlite";
+
+        protected virtual string ConnectionStringKey => "ConnectionStrings:Sqlite";
+
+        protected virtual string ConnectionStringValue => $"Data Source={dbPath}";
+
         public ScaleTriggerApplicationFactory()
         {
             // Program.cs reads Jwt:Key via builder.Configuration (and fails fast if it's empty)
@@ -39,8 +49,8 @@ namespace ScaleTrigger.Tests
             {
                 configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["DatabaseProvider"] = "Sqlite",
-                    ["ConnectionStrings:Sqlite"] = $"Data Source={dbPath}",
+                    ["DatabaseProvider"] = DatabaseProvider,
+                    [ConnectionStringKey] = ConnectionStringValue,
                     ["Startup:FailFastOnDbCheck"] = "true",
                     ["Auth:Enabled"] = AuthEnabled.ToString(),
 

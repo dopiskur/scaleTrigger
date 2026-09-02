@@ -76,7 +76,10 @@ namespace ScaleTrigger.Repositories
 
             using (var checkCmd = connection.CreateCommand())
             {
-                checkCmd.CommandText = "SELECT to_regclass('public.vote')";
+                // ::text avoids reading a native "regclass" value through ExecuteScalarAsync's untyped
+                // object result - Npgsql (10.x here) no longer maps that internal OID type to a CLR
+                // type by default, so without the cast this throws instead of returning null/a name.
+                checkCmd.CommandText = "SELECT to_regclass('public.vote')::text";
                 if (await checkCmd.ExecuteScalarAsync() is not DBNull and not null)
                 {
                     return;
@@ -128,7 +131,8 @@ namespace ScaleTrigger.Repositories
 
             using (var checkCmd = connection.CreateCommand())
             {
-                checkCmd.CommandText = "SELECT to_regclass('public.load_config')";
+                // ::text - see the same cast's comment in EnsureSchemaAsync above.
+                checkCmd.CommandText = "SELECT to_regclass('public.load_config')::text";
                 if (await checkCmd.ExecuteScalarAsync() is DBNull or null)
                 {
                     foreach (var batch in SchemaScripts.PostgreSqlLoadConfig)
