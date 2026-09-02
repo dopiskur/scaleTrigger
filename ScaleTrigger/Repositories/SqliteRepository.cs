@@ -239,12 +239,16 @@ namespace ScaleTrigger.Repositories
             transaction.Commit();
         }
 
-        /// <summary>SQLite has no dedicated "no such table" error code - SQLITE_ERROR (1) covers many unrelated failures too, so this matches on the message text.</summary>
+        /// <summary>SQLite has no dedicated "no such table" error code - SQLITE_ERROR (1) is a
+        /// catch-all that in principle also covers things like malformed SQL. Every statement this
+        /// repository runs is a fixed string, though (never built from user input), so the only way
+        /// one of them can actually raise SQLITE_ERROR is a missing table/column - a syntax error in
+        /// static SQL would fail every call, not just after Reset/DropSchema. Checking the numeric
+        /// code alone is therefore as precise here as message-matching, and stable across
+        /// Microsoft.Data.Sqlite versions the way exact wording isn't.</summary>
         public DbFailureKind ClassifyException(Exception ex)
         {
-            if (ex is SqliteException sqliteEx &&
-                sqliteEx.SqliteErrorCode == 1 &&
-                sqliteEx.Message.Contains("no such table", StringComparison.OrdinalIgnoreCase))
+            if (ex is SqliteException { SqliteErrorCode: 1 })
             {
                 return DbFailureKind.SchemaMissing;
             }

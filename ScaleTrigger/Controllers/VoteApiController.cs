@@ -171,16 +171,25 @@ namespace ScaleTrigger.Controllers
         {
             var repo = repoFactory.GetRepo();
 
-            await repo.DropSchemaAsync();
-            await repo.EnsureSchemaAsync();
+            try
+            {
+                await repo.DropSchemaAsync();
+                await repo.EnsureSchemaAsync();
 
-            var defaults = LoadConfigDefaults.ReadFrom(configuration);
-            await repo.LoadConfigEnsureSeededAsync(defaults);
-            loadConfigCache.Set(await repo.LoadConfigGetAsync());
+                var defaults = LoadConfigDefaults.ReadFrom(configuration);
+                await repo.LoadConfigEnsureSeededAsync(defaults);
+                loadConfigCache.Set(await repo.LoadConfigGetAsync());
 
-            repoFactory.GetCache().RemoveItem(ReportCacheKey);
+                repoFactory.GetCache().RemoveItem(ReportCacheKey);
 
-            return Ok();
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                var failureKind = repo.ClassifyException(ex);
+                logger.LogWarning(ex, "Reset failed (DbFailureKind={DbFailureKind}).", failureKind);
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, DbErrorResponse.For(failureKind));
+            }
         }
 
         private int RandomizedLoadValue(string settingName)

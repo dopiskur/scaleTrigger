@@ -8,16 +8,15 @@ namespace ScaleTrigger
     /// <summary>Hardware detection and one-off CPU/memory/disk benchmarks, triggered manually from the dashboard; unrelated to the per-vote Load:* simulation.</summary>
     public static class NodeBenchmark
     {
-        private static NodeHardwareInfo? cachedHardwareInfo;
+        private static readonly Lazy<Task<NodeHardwareInfo>> CachedHardwareInfo =
+            new(DetectHardwareInfoAsync, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        /// <summary>Cached after the first call. Checks env vars before any network call, and orchestrator signals (Kubernetes, ECS) before the VM's own metadata service, since AKS/EKS nodes and EC2-backed ECS tasks would otherwise be misidentified as a bare VM.</summary>
-        public static async Task<NodeHardwareInfo> GetHardwareInfoAsync()
+        /// <summary>Cached after the first call - Lazy ensures two concurrent first calls on a cold start share one detection run (including its HTTP calls to the metadata service) instead of each racing to run it separately.</summary>
+        public static Task<NodeHardwareInfo> GetHardwareInfoAsync() => CachedHardwareInfo.Value;
+
+        /// <summary>Checks env vars before any network call, and orchestrator signals (Kubernetes, ECS) before the VM's own metadata service, since AKS/EKS nodes and EC2-backed ECS tasks would otherwise be misidentified as a bare VM.</summary>
+        private static async Task<NodeHardwareInfo> DetectHardwareInfoAsync()
         {
-            if (cachedHardwareInfo != null)
-            {
-                return cachedHardwareInfo;
-            }
-
             string environment;
             string cpu;
 
@@ -89,7 +88,7 @@ namespace ScaleTrigger
                 // Best-effort - not every environment exposes drive info.
             }
 
-            cachedHardwareInfo = new NodeHardwareInfo
+            return new NodeHardwareInfo
             {
                 Environment = environment,
                 Cpu = cpu,
@@ -97,8 +96,6 @@ namespace ScaleTrigger
                 TotalMemoryMb = totalMemoryMb,
                 DiskTotalGb = diskTotalGb
             };
-
-            return cachedHardwareInfo;
         }
 
         /// <summary>500ms-timeout HttpClient wrapper that swallows any exception into null; shared by every metadata probe below.</summary>
