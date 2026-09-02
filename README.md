@@ -67,6 +67,14 @@ dotnet run
 
 With the example config's default `DatabaseProvider: "Sqlite"`, this needs nothing else, just a local file (`scaletrigger.db`), created automatically on first run.
 
+## Testing
+
+```bash
+dotnet test ScaleTrigger.Tests
+```
+
+`ScaleTrigger.Tests` is an integration suite (`WebApplicationFactory<Program>`) that hosts the real app in-process against a throwaway Sqlite file per test class - no Docker, no Azure, no manual setup, and it needs no `appsettings.json` (all required settings are supplied by the test factory). Covers the core vote flow (`add` → `report` → `reset`), `LoadConfig` validation, JWT auth (login, unauthenticated/authenticated `POST /api/vote/add`), and the health endpoints. Runs in CI (`.github/workflows/deploy-api.yml`) before every deploy. MySQL/PostgreSQL/MSSQL-specific behavior isn't covered - the four `IRepository` implementations share everything except their SQL, so this trades that slice of coverage for a suite that needs no external database and runs in seconds.
+
 ## Azure demo infrastructure: one click, provisions and deploys everything
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure-demo-resources%2Fmain.json)

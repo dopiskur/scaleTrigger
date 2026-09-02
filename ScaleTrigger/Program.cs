@@ -217,3 +217,7 @@ app.MapPrometheusScrapingEndpoint();
 app.MapControllers();
 
 app.Run();
+
+// Exposes the top-level statements' auto-generated Program class (internal by default) to
+// ScaleTrigger.Tests, so WebApplicationFactory<Program> can host this app in-process.
+public partial class Program { }
