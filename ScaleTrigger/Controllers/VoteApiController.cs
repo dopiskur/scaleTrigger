@@ -46,14 +46,13 @@ namespace ScaleTrigger.Controllers
             int networkLatencyMilliseconds = RandomizedLoadValue("NetworkLatencyMillisecondsPerVote");
             int dbHashIterations = RandomizedLoadValue("DbCpuIterationsPerVote");
 
-            // Offloaded so this CPU/disk-bound work doesn't starve the thread pool
-            // under concurrent load - same reasoning as NodeBenchmarkApiController.Run.
-            await Task.Run(async () =>
-            {
-                LoadSimulator.SimulateCpuLoad(cpuIterations);
-                await LoadSimulator.SimulateMemoryLoadAsync(memoryKilobytes, ct);
-                await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
-            }, ct);
+            // Kestrel already dispatches request handlers on a ThreadPool thread (no
+            // SynchronizationContext to marshal back to, unlike classic ASP.NET), so running
+            // this CPU-bound work synchronously here uses the same pool a wrapping Task.Run
+            // would - the extra hop just added scheduling overhead without isolating anything.
+            LoadSimulator.SimulateCpuLoad(cpuIterations);
+            await LoadSimulator.SimulateMemoryLoadAsync(memoryKilobytes, ct);
+            await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
             await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
 
             if (dbCpuBurnOnly)
