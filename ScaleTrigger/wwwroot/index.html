@@ -10,77 +10,77 @@
   <div class="viz-root">
     <h1>ScaleTrigger</h1>
 
-    <div class="dashboard-columns">
-      <div>
-        <div class="card">
-          <p class="section-title">Votes</p>
+    <div class="top-row">
+      <div class="card">
+        <p class="section-title">Votes</p>
 
-          <p class="group-title">Details</p>
-          <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
+        <p class="group-title">Details</p>
+        <div class="bench-row"><span class="loadconfig-label">Total votes</span><span class="bench-value" id="total">—</span></div>
+        <div class="bench-row"><span class="loadconfig-label">Payload</span><span class="bench-value" id="payload">—</span></div>
+        <div class="bench-row"><span class="loadconfig-label">Updated</span><span class="bench-value" id="updated">—</span></div>
 
-          <div class="config-actions">
-            <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
-            <button class="save-btn" id="discard-backlog-btn" type="button">Discard backlog</button>
-            <span class="status status--inline" id="db-unavailable-indicator"></span>
-          </div>
-          <p class="status" id="status">Loading…</p>
+        <div class="config-actions">
+          <button class="reset-btn" id="reset-btn" type="button">Reset database</button>
+          <button class="save-btn" id="discard-backlog-btn" type="button">Discard backlog</button>
+          <span class="status status--inline" id="db-unavailable-indicator"></span>
         </div>
-
-        <div class="card">
-          <p class="section-title">Request latency</p>
-          <p class="group-subtitle" id="latency-status">Loading…</p>
-          <div id="latency-chart"></div>
-        </div>
-
-        <div class="card">
-          <p class="section-title">Node benchmark</p>
-
-          <p class="group-subtitle" id="hw-status">Loading hardware info…</p>
-          <div id="hw-rows"></div>
-
-          <p class="group-title">Benchmark</p>
-          <div class="bench-row"><span class="loadconfig-label">CPU</span><span class="bench-value" id="bench-cpu">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Memory</span><span class="bench-value" id="bench-memory">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Disk</span><span class="bench-value" id="bench-disk">—</span></div>
-
-          <div class="loadconfig-row loadconfig-row--single">
-            <span class="loadconfig-label">Concurrent votes (N)</span>
-            <input type="number" id="recommend-n-input" class="loadconfig-input" min="1" step="1" value="100">
-          </div>
-          <div class="bench-row"><span class="loadconfig-label">Recommended Max (ceiling)</span><span class="bench-value" id="recommend-max">—</span></div>
-          <div class="bench-row"><span class="loadconfig-label">Recommended Min (floor)</span><span class="bench-value" id="recommend-min">—</span></div>
-
-          <div class="config-actions">
-            <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
-            <button class="save-btn" id="set-recommended-btn" type="button">Set recommended</button>
-          </div>
-          <p class="status" id="benchmark-status"></p>
-        </div>
+        <p class="status" id="status">Loading…</p>
       </div>
 
       <div class="card">
-        <p class="section-title">Configuration</p>
+        <p class="section-title">Request latency</p>
+        <p class="group-subtitle" id="latency-status">Loading…</p>
+        <div id="latency-chart"></div>
+      </div>
 
-        <div class="config-group">
-          <div class="config-actions">
-            <button class="save-btn" id="preset-light-btn" type="button">Light</button>
-            <button class="save-btn" id="preset-medium-btn" type="button">Medium</button>
-            <button class="save-btn" id="preset-heavy-btn" type="button">Heavy</button>
-            <span class="status status--inline" id="preset-status"></span>
-          </div>
+      <div class="card">
+        <p class="section-title">Node benchmark</p>
+
+        <p class="group-subtitle" id="hw-status">Loading hardware info…</p>
+        <div id="hw-rows"></div>
+
+        <p class="group-title">Benchmark</p>
+        <div class="bench-row"><span class="loadconfig-label">CPU</span><span class="bench-value" id="bench-cpu">—</span></div>
+        <div class="bench-row"><span class="loadconfig-label">Memory</span><span class="bench-value" id="bench-memory">—</span></div>
+        <div class="bench-row"><span class="loadconfig-label">Disk</span><span class="bench-value" id="bench-disk">—</span></div>
+
+        <div class="loadconfig-row loadconfig-row--single">
+          <span class="loadconfig-label">Concurrent votes (N)</span>
+          <input type="number" id="recommend-n-input" class="loadconfig-input" min="1" step="1" value="100">
         </div>
+        <div class="bench-row"><span class="loadconfig-label">Recommended Max (ceiling)</span><span class="bench-value" id="recommend-max">—</span></div>
+        <div class="bench-row"><span class="loadconfig-label">Recommended Min (floor)</span><span class="bench-value" id="recommend-min">—</span></div>
 
-        <div class="config-group">
-          <p class="group-title">Operational</p>
-          <div class="loadconfig-row loadconfig-row--single">
-            <span class="loadconfig-col-heading">Setting</span>
-            <span class="loadconfig-col-heading">Value</span>
-          </div>
-          <div id="loadconfig-rows-refresh"></div>
+        <div class="config-actions">
+          <button class="save-btn" id="benchmark-btn" type="button">Run benchmark</button>
+          <button class="save-btn" id="set-recommended-btn" type="button">Set recommended</button>
         </div>
+        <p class="status" id="benchmark-status"></p>
+      </div>
+    </div>
 
+    <div class="card">
+      <p class="section-title">Configuration</p>
+
+      <div class="config-group">
+        <div class="config-actions">
+          <button class="save-btn" id="preset-light-btn" type="button">Light</button>
+          <button class="save-btn" id="preset-medium-btn" type="button">Medium</button>
+          <button class="save-btn" id="preset-heavy-btn" type="button">Heavy</button>
+          <span class="status status--inline" id="preset-status"></span>
+        </div>
+      </div>
+
+      <div class="config-group">
+        <p class="group-title">Operational</p>
+        <div class="loadconfig-row loadconfig-row--single">
+          <span class="loadconfig-col-heading">Setting</span>
+          <span class="loadconfig-col-heading">Value</span>
+        </div>
+        <div id="loadconfig-rows-refresh"></div>
+      </div>
+
+      <div class="config-columns">
         <div class="config-group">
           <p class="group-title">Application</p>
           <div class="loadconfig-row">
@@ -100,16 +100,16 @@
           </div>
           <div id="loadconfig-rows-database"></div>
         </div>
+      </div>
 
-        <div class="config-group">
-          <div class="config-actions">
-            <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
-            <button class="save-btn" id="loadconfig-export-btn" type="button">Export JSON</button>
-            <button class="save-btn" id="loadconfig-import-btn" type="button">Import JSON</button>
-            <input type="file" id="loadconfig-import-input" accept="application/json" hidden>
-          </div>
-          <p class="status" id="loadconfig-status"></p>
+      <div class="config-group">
+        <div class="config-actions">
+          <button class="save-btn" id="loadconfig-save-btn" type="button">Save changes</button>
+          <button class="save-btn" id="loadconfig-export-btn" type="button">Export JSON</button>
+          <button class="save-btn" id="loadconfig-import-btn" type="button">Import JSON</button>
+          <input type="file" id="loadconfig-import-input" accept="application/json" hidden>
         </div>
+        <p class="status" id="loadconfig-status"></p>
       </div>
     </div>
   </div>
