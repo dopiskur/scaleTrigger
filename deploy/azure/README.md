@@ -6,13 +6,14 @@ Three ways to run ScaleTrigger, roughly ordered from "just try it" to "how you'd
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdopiskur%2FscaleTrigger%2Fmaster%2Fdeploy%2Fazure%2Fmain.json)
 
-Click it, fill in an App Service name (the only required field), and deploy. This provisions:
+Every field already has a default, so you can literally just click "Review + create" and deploy — nothing is required. This is a **subscription-scope** template: there's no resource group to pick beforehand, it creates one itself (named `ScaleTrigger` by default, via the `resourceGroupName` parameter) and deploys into that. This provisions:
 
+- The **resource group** itself (`resourceGroupName`, default `ScaleTrigger`) — created if it doesn't exist yet, reused as-is if it does.
 - A **Linux App Service Plan** on the `S1` (Standard) tier by default — deliberately not Basic/Free, since autoscale rules (the entire point of this tool) require Standard tier or higher.
-- The **App Service** itself, with GitHub source control pointed at this repo's `master` branch (`isManualIntegration: true` — works against a public repo with no token or publish profile). App Service's own Oryx build picks up `ScaleTrigger.sln` and builds it on first push, so the site is live shortly after the deployment finishes, no separate CI step needed.
+- The **App Service** itself (`appServiceName`, default `ScaleTrigger` — must be globally unique across Azure since it becomes `<name>.azurewebsites.net`, so change it if that default is already taken), with GitHub source control pointed at this repo's `master` branch (`isManualIntegration: true` — works against a public repo with no token or publish profile). App Service's own Oryx build picks up `ScaleTrigger.sln` and builds it on first push, so the site is live shortly after the deployment finishes, no separate CI step needed.
 - Every **Application Setting** `appsettings.json.example` seeds the app from (`DatabaseProvider`, `ConnectionStrings__*`, `Auth__Enabled`, `Load__*`, `NodeBenchmark__*`, `Jwt__*`, `AdminUser__*`, ...), using the same `:` → `__` nesting convention as any other Azure App Service deployment of this app.
 
-Everything past the App Service name has a sensible default (matching `appsettings.json.example`) and is optional in the portal's parameter form. Notably: `databaseProvider` defaults to `Sqlite`, which needs no external database and is enough to confirm the deploy actually works — but SQLite's file lives on the App Service's ephemeral storage (wiped on restart/scale), so switch `databaseProvider` and the matching `connectionString*` parameter to a real database (MSSQL/MySQL/PostgreSQL) before running anything you'd mind losing.
+Everything past `resourceGroupName`/`appServiceName` has a sensible default too (matching `appsettings.json.example`) and is optional in the portal's parameter form. Notably: `databaseProvider` defaults to `Sqlite`, which needs no external database and is enough to confirm the deploy actually works — but SQLite's file lives on the App Service's ephemeral storage (wiped on restart/scale), so switch `databaseProvider` and the matching `connectionString*` parameter to a real database (MSSQL/MySQL/PostgreSQL) before running anything you'd mind losing.
 
 The button always deploys **the current `main.json` on `master`**, kept in sync automatically — see "Keeping main.json in sync" below.
 
@@ -20,11 +21,12 @@ This scenario provisions infrastructure and gets a first build running; it's not
 
 ### Deploying by hand instead of the button
 
+Subscription-scope, so this targets a region directly instead of an existing resource group — `resourceGroupName` (default `ScaleTrigger`) controls which resource group gets created/reused:
+
 ```bash
-az deployment group create \
-  --resource-group <your-resource-group> \
-  --template-file deploy/azure/main.bicep \
-  --parameters appServiceName=<your-app-name>
+az deployment sub create \
+  --location <azure-region> \
+  --template-file deploy/azure/main.bicep
 ```
 
 ## 2. Repeatable deploys — GitHub Actions

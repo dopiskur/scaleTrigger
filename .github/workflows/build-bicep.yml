@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'deploy/azure/main.bicep'
+      - 'deploy/azure/modules/**.bicep'
       - 'deploy/azure-demo-resources/main.bicep'
       - 'deploy/azure-demo-resources/modules/**.bicep'
       - '.github/workflows/build-bicep.yml'

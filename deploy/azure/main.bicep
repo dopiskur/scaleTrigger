@@ -1,14 +1,20 @@
-// ScaleTrigger - single App Service deployment (GitHub source control, Oryx build). Maps
-// every appsettings.json.example setting to an Application Setting via ':' -> '__'. See
-// deploy/azure/README.md; compiled to main.json via `az bicep build`.
+// ScaleTrigger - single App Service deployment (GitHub source control, Oryx build).
+// Subscription-scope so the "Deploy to Azure" button needs no pre-existing resource group -
+// it creates (or reuses) one named resourceGroupName and deploys modules/app-service.bicep
+// into it. See deploy/azure/README.md; compiled to main.json via `az bicep build`.
+
+targetScope = 'subscription'
+
+@description('Resource group to deploy into - created automatically if it does not already exist, reused as-is if it does.')
+param resourceGroupName string = 'ScaleTrigger'
 
 @description('Name of the App Service (must be globally unique - becomes <name>.azurewebsites.net).')
 @minLength(2)
 @maxLength(60)
-param appServiceName string
+param appServiceName string = 'ScaleTrigger'
 
 @description('Azure region for all resources.')
-param location string = resourceGroup().location
+param location string = deployment().location
 
 @description('App Service Plan SKU. Autoscale rules (the whole point of this tool) need Standard tier or higher - Basic/Free plans cannot be autoscaled.')
 @allowed([
@@ -110,98 +116,61 @@ param loggingLevelDefault string = 'Information'
 param loggingLevelAspNetCore string = 'Warning'
 param allowedHosts string = '*'
 
-var appServicePlanName = '${appServiceName}-plan'
-
-resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: appServicePlanName
+resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
+  name: resourceGroupName
   location: location
-  kind: 'linux'
-  sku: {
-    name: skuName
-  }
-  properties: {
-    reserved: true
-  }
 }
 
-resource appService 'Microsoft.Web/sites@2023-12-01' = {
-  name: appServiceName
-  location: location
-  kind: 'app,linux'
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    serverFarmId: appServicePlan.id
-    httpsOnly: true
-    siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|10.0'
-      alwaysOn: true
-      appSettings: [
-        { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
-
-        { name: 'DatabaseProvider', value: databaseProvider }
-        { name: 'UseManagedIdentity', value: string(useManagedIdentity) }
-
-        { name: 'ConnectionStrings__MsSql', value: connectionStringMsSql }
-        { name: 'ConnectionStrings__MySql', value: connectionStringMySql }
-        { name: 'ConnectionStrings__PostgreSql', value: connectionStringPostgreSql }
-        { name: 'ConnectionStrings__Sqlite', value: connectionStringSqlite }
-
-        { name: 'Auth__Enabled', value: string(authEnabled) }
-        { name: 'Startup__FailFastOnDbCheck', value: string(failFastOnDbCheck) }
-        { name: 'Cache__SlidingExpirationMinutes', value: string(cacheSlidingExpirationMinutes) }
-
-        { name: 'Load__ConfigRefresh__Min', value: string(loadConfigRefreshMinSeconds) }
-        { name: 'Load__ConfigRefresh__Max', value: string(loadConfigRefreshMaxSeconds) }
-        { name: 'Load__LoadEnabled__Min', value: string(loadEnabled ? 1 : 0) }
-        { name: 'Load__LoadEnabled__Max', value: string(loadEnabled ? 1 : 0) }
-        { name: 'Load__CacheEnabled__Min', value: string(loadCacheEnabled ? 1 : 0) }
-        { name: 'Load__CacheEnabled__Max', value: string(loadCacheEnabled ? 1 : 0) }
-        { name: 'Load__CpuIterationsPerVote__Min', value: string(loadCpuIterationsPerVoteMin) }
-        { name: 'Load__CpuIterationsPerVote__Max', value: string(loadCpuIterationsPerVoteMax) }
-        { name: 'Load__MemoryKilobytesPerVote__Min', value: string(loadMemoryKilobytesPerVoteMin) }
-        { name: 'Load__MemoryKilobytesPerVote__Max', value: string(loadMemoryKilobytesPerVoteMax) }
-        { name: 'Load__DiskWriteKilobytesPerVote__Min', value: string(loadDiskWriteKilobytesPerVoteMin) }
-        { name: 'Load__DiskWriteKilobytesPerVote__Max', value: string(loadDiskWriteKilobytesPerVoteMax) }
-        { name: 'Load__NetworkLatencyMillisecondsPerVote__Min', value: string(loadNetworkLatencyMillisecondsPerVoteMin) }
-        { name: 'Load__NetworkLatencyMillisecondsPerVote__Max', value: string(loadNetworkLatencyMillisecondsPerVoteMax) }
-        { name: 'Load__PayloadBytesPerVote__Min', value: string(loadPayloadBytesPerVoteMin) }
-        { name: 'Load__PayloadBytesPerVote__Max', value: string(loadPayloadBytesPerVoteMax) }
-        { name: 'Load__DbCpuIterationsPerVote__Min', value: string(loadDbCpuIterationsPerVoteMin) }
-        { name: 'Load__DbCpuIterationsPerVote__Max', value: string(loadDbCpuIterationsPerVoteMax) }
-
-        { name: 'NodeBenchmark__CpuDurationSeconds', value: string(nodeBenchmarkCpuDurationSeconds) }
-        { name: 'NodeBenchmark__MemoryBlockMegabytes', value: string(nodeBenchmarkMemoryBlockMegabytes) }
-        { name: 'NodeBenchmark__MemoryRepetitions', value: string(nodeBenchmarkMemoryRepetitions) }
-        { name: 'NodeBenchmark__DiskSizeMegabytes', value: string(nodeBenchmarkDiskSizeMegabytes) }
-        { name: 'NodeBenchmark__DiskRepetitions', value: string(nodeBenchmarkDiskRepetitions) }
-
-        { name: 'Jwt__Key', value: jwtKey }
-        { name: 'Jwt__Issuer', value: jwtIssuer }
-        { name: 'Jwt__Audience', value: jwtAudience }
-        { name: 'Jwt__ExpirationMinutes', value: string(jwtExpirationMinutes) }
-
-        { name: 'AdminUser__Username', value: adminUsername }
-        { name: 'AdminUser__Password', value: adminPassword }
-
-        { name: 'Logging__LogLevel__Default', value: loggingLevelDefault }
-        { name: 'Logging__LogLevel__Microsoft.AspNetCore', value: loggingLevelAspNetCore }
-        { name: 'AllowedHosts', value: allowedHosts }
-      ]
-    }
-  }
-}
-
-resource sourceControl 'Microsoft.Web/sites/sourcecontrols@2023-12-01' = {
-  parent: appService
-  name: 'web'
-  properties: {
-    repoUrl: repositoryUrl
+module appService 'modules/app-service.bicep' = {
+  name: 'deploy-app-service'
+  scope: rg
+  params: {
+    appServiceName: appServiceName
+    location: location
+    skuName: skuName
+    repositoryUrl: repositoryUrl
     branch: branch
-    isManualIntegration: true
+    databaseProvider: databaseProvider
+    useManagedIdentity: useManagedIdentity
+    connectionStringMsSql: connectionStringMsSql
+    connectionStringMySql: connectionStringMySql
+    connectionStringPostgreSql: connectionStringPostgreSql
+    connectionStringSqlite: connectionStringSqlite
+    authEnabled: authEnabled
+    failFastOnDbCheck: failFastOnDbCheck
+    cacheSlidingExpirationMinutes: cacheSlidingExpirationMinutes
+    loadConfigRefreshMinSeconds: loadConfigRefreshMinSeconds
+    loadConfigRefreshMaxSeconds: loadConfigRefreshMaxSeconds
+    loadEnabled: loadEnabled
+    loadCacheEnabled: loadCacheEnabled
+    loadCpuIterationsPerVoteMin: loadCpuIterationsPerVoteMin
+    loadCpuIterationsPerVoteMax: loadCpuIterationsPerVoteMax
+    loadMemoryKilobytesPerVoteMin: loadMemoryKilobytesPerVoteMin
+    loadMemoryKilobytesPerVoteMax: loadMemoryKilobytesPerVoteMax
+    loadDiskWriteKilobytesPerVoteMin: loadDiskWriteKilobytesPerVoteMin
+    loadDiskWriteKilobytesPerVoteMax: loadDiskWriteKilobytesPerVoteMax
+    loadNetworkLatencyMillisecondsPerVoteMin: loadNetworkLatencyMillisecondsPerVoteMin
+    loadNetworkLatencyMillisecondsPerVoteMax: loadNetworkLatencyMillisecondsPerVoteMax
+    loadPayloadBytesPerVoteMin: loadPayloadBytesPerVoteMin
+    loadPayloadBytesPerVoteMax: loadPayloadBytesPerVoteMax
+    loadDbCpuIterationsPerVoteMin: loadDbCpuIterationsPerVoteMin
+    loadDbCpuIterationsPerVoteMax: loadDbCpuIterationsPerVoteMax
+    nodeBenchmarkCpuDurationSeconds: nodeBenchmarkCpuDurationSeconds
+    nodeBenchmarkMemoryBlockMegabytes: nodeBenchmarkMemoryBlockMegabytes
+    nodeBenchmarkMemoryRepetitions: nodeBenchmarkMemoryRepetitions
+    nodeBenchmarkDiskSizeMegabytes: nodeBenchmarkDiskSizeMegabytes
+    nodeBenchmarkDiskRepetitions: nodeBenchmarkDiskRepetitions
+    jwtKey: jwtKey
+    jwtIssuer: jwtIssuer
+    jwtAudience: jwtAudience
+    jwtExpirationMinutes: jwtExpirationMinutes
+    adminUsername: adminUsername
+    adminPassword: adminPassword
+    loggingLevelDefault: loggingLevelDefault
+    loggingLevelAspNetCore: loggingLevelAspNetCore
+    allowedHosts: allowedHosts
   }
 }
 
-output appServiceUrl string = 'https://${appService.properties.defaultHostName}'
-output appServiceName string = appService.name
+output appServiceUrl string = appService.outputs.appServiceUrl
+output appServiceName string = appService.outputs.appServiceName
