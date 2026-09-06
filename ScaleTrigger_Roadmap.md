@@ -1,6 +1,8 @@
 # ScaleTrigger — Preostale stavke za implementaciju
 
 > **Status (2026-09-02):** Faze 0, 1 i 2 su implementirane i verificirane (`dotnet test` — 33/33 prolazi, uključujući MSSQL Testcontainers protiv stvarnog Docker containera). Faza 3 i Faza 4 su namjerno preskočene — obje su u ovom dokumentu već označene kao svjesni kompromisi/nice-to-have niskog prioriteta, ne kao stavke koje nedostaju. Detalji po stavci ostaju ispod radi traga, s ✅ dodanim uz svaku dovršenu.
+>
+> **Status (2026-09-06):** Faza 5 (code review commita `1abe14e`, "Fix load-safety gaps") dodana i najvećim dijelom implementirana — `dotnet test` 54/54 prolazi (39 non-container + 15 Testcontainers MySQL/PostgreSQL/MSSQL). Stavke #1 i #4 tog reviewa još nisu proslijeđene i ostaju otvorene niže.
 
 Ovaj dokument nastaje nakon što je prethodni roadmap (`ScaleTrigger_Roadmap.md`) gotovo u cijelosti implementiran u repozitoriju [dopiskur/scaleTrigger](https://github.com/dopiskur/scaleTrigger). Sadržaj je provjeren svježim kloniranjem repozitorija i čitanjem izvornog koda — ne pretpostavljen.
 
@@ -175,6 +177,39 @@ Radi konteksta, kratak pregled onoga što **više nije potrebno raditi**, jer je
 2. API verzioniranje (`/api/v1/...`) — nizak prioritet dok API nema vanjske potrošače
 3. WebSocket umjesto pollinga — kozmetičko poboljšanje
 4. Multi-tenant, Chaos mode — realno neisplativo s obzirom na veličinu ciljane publike (MCT zajednica)
+
+### Faza 5 — Code review commita `1abe14e` ("Fix load-safety gaps: disk allocation, cancellation, proxy trust, logging")
+
+*Numeracija prati redoslijed kojim su stavke prijavljene u razgovoru, ne prioritet.*
+
+1. ⏳ **Nepoznato — stavka nije proslijeđena.** Review je najavljen kao "četiri stare + jedna nova" stavka; stavke #2, #3 i #5 su primljene i obrađene niže, "nova" stavka je EnsureValid placement (obrađeno kao stavka 5.5 dolje). Ova (#1) i #4 nikad nisu poslane — treba ih dostaviti da bi ovaj odjeljak bio potpun.
+
+2. ✅ **Budžet i rampanje pokrivaju samo jednu od tri alokacijske putanje.** `SimulateDiskLoad` je već streamano iz 64 KB buffera unutar ovog istog commita (`LoadSimulator.cs`), ali `payload = new byte[payloadBytes]` u `VoteApiController.VoteAdd` (do 10 MB, `PayloadBytesPerVote`) i dalje se alocirao bez ikakve provjere budžeta — jedina od tri load-generirajuće alokacije (memorija/disk/payload) koja zaobilazila `LoadSimulator.MemoryLoadBudget`.
+
+   **Implementirano:** `VoteApiController.cs` sad rezervira `payloadBytes` kroz `LoadSimulator.MemoryLoadBudget.TryReserve` prije alokacije i oslobađa ga u `finally` nakon `repo.VoteAddAsync`. Ako budžet nije dostupan, payload se za taj glas jednostavno preskače (isto ponašanje kao `SimulateMemoryLoadAsync` kad je budžet potrošen) — ostatak glasa se svejedno izvršava. Regresijski test: `VotePayloadBudgetTests.VoteAdd_ReleasesThePayloadReservation_AfterTheVoteCompletes` (dokazuje da se rezervacija stvarno oslobađa, ne curi kroz ponovljene pozive).
+
+3. ✅ **Load simulacija bez testova.** Commit `1abe14e` nije dirao nijedan fajl u `ScaleTrigger.Tests/` unatoč dodanoj logici (cancellation, validacija, forwarded headers, retry caching).
+
+   **Implementirano:** dodano 6 novih test fajlova —
+   - `LoadSimulatorTests.cs` — `MemoryLoadBudget.TryReserve`/`Release` mehanika, `SimulateMemoryLoadAsync` preskakanje kad je budžet potrošen, oslobađanje rezervacije pri cancellationu, `SimulateDiskLoad` smoke test, `SimulateCpuLoad` cancellation.
+   - `DbRetryPolicyTests.cs` — retry na tranzijentnu grešku pa uspjeh, bez retryja na netranzijentnu, odustajanje nakon `MaxRetryAttempts`.
+   - `CorrelationIdMiddlewareTests.cs` — generiranje ID-a bez header-a, echo validnog, odbacivanje predugog/nevalidnog s generiranjem novog.
+   - `AuthStatusTests.cs` — `/api/auth/status` za `Auth:Enabled` true/false, anonymous pristup.
+   - `LoginRateLimitTests.cs` — 6. pokušaj logina unutar minute vraća 429.
+   - `VotePayloadBudgetTests.cs` — vidi stavku 2 gore.
+   - `StartupValidationTests.cs` — vidi stavku 5.5 ispod.
+
+   `dotnet test`: 54/54 prolazi (39 non-container + 15 Testcontainers MySQL/PostgreSQL/MSSQL).
+
+4. ⏳ **Nepoznato — stavka nije proslijeđena.** Vidi napomenu uz stavku 1.
+
+5. ✅ **Logging pod opterećenjem postaje dio opterećenja — već riješeno unutar samog commita `1abe14e`, provjereno u kodu, bez potrebe za dodatnom izmjenom.** Provjereno da `Program.cs` već: per-vote red spušta na Debug (`VoteApiController` koristi `LogDebug`), `UseSerilogRequestLogging` ima custom `GetLevel` koji `/api/vote/add` uspješne pozive loguje na Debug (Warning+ samo za 4xx, Error za 5xx/exception), file sink je opcionalan (`Serilog:FileEnabled`, default `true` lokalno) i eksplicitno isključen na App Serviceu (`Serilog__FileEnabled=false` u `app-service.bicep`), uz `rollOnFileSizeLimit: true`. Nikakva akcija nije bila potrebna.
+
+5.5. ✅ **[Novo, otkriveno u ovom reviewu] `EnsureValid` unutar DB try/catch bloka.** `LoadConfigDefaults.EnsureValid` je bio pozvan unutar istog `try` bloka koji hvata DB greške (`Program.cs`, bilo oko linije 193). Posljedica: neispravna seed vrijednost (Min > Max, tipfeler u Bicep parametru) bacala je iznimku koja se logirala kao "Database connection or schema check FAILED... Check ConnectionStrings, firewall rules..." — dijagnoza koja pokazuje na bazu dok je stvarni problem konfiguracija. Budući da je `Startup:FailFastOnDbCheck` opt-in (default `false`), app je nastavljao raditi s praznim `LoadConfigCache` → `Get()` vraća `(0, 0)` za sve → `LoadEnabled` čita kao isključen → svaki `POST /api/vote/add` postaje tihi no-op `200 OK` bez ikakve simulacije, dok log krivi bazu.
+
+   **Implementirano:** `LoadConfigDefaults.ReadFrom` + `EnsureValid` premješteni iznad DB try/catch bloka u `Program.cs`, izvršavaju se bezuvjetno prije provjere `Startup:FailFastOnDbCheck` — neispravna konfiguracija sad ruši startup uvijek, neovisno o DB politici. Regresijski test: `StartupValidationTests.InvalidLoadConfigSeed_FailsStartup_EvenWhenFailFastOnDbCheckIsFalse`.
+
+   **Manje (isti nalaz):** `IPAddress.Parse(proxy)` u petlji za `ForwardedHeaders:KnownProxies` je neispravnu vrijednost rušio generičkim `FormatException` bez naznake koji ključ/vrijednost je kriva. Zamijenjeno s `IPAddress.TryParse` + `InvalidOperationException` s jasnom porukom ("ForwardedHeaders:KnownProxies contains an invalid IP address: '...'"). Regresijski test: `StartupValidationTests.InvalidKnownProxiesEntry_FailsStartupWithAClearError`.
 
 ---
 

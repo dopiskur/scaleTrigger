@@ -170,6 +170,18 @@ var app = builder.Build();
     }
 }
 
+// Config validation is a startup precondition, not a DB-availability concern - it fails
+// unconditionally, regardless of "Startup:FailFastOnDbCheck" below. Without this, a bad seed
+// value (a typo in a Bicep parameter, Min > Max) threw from inside the DB try/catch, got logged
+// as a misleading "Database connection or schema check FAILED" (pointing at the database when
+// the actual problem is configuration), and - since FailFastOnDbCheck defaults to false - left
+// the app running with LoadConfigCache never populated. Every LoadConfigCache.Get() then falls
+// back to (0, 0), so LoadEnabled reads as off and every vote becomes a silent no-op 200: a
+// misconfigured seed produces an app that looks up and simulates nothing, blaming the database
+// in the log for what is actually a config error.
+var loadDefaults = LoadConfigDefaults.ReadFrom(app.Configuration);
+LoadConfigDefaults.EnsureValid(loadDefaults);
+
 // Fails fast (or just warns) here instead of on the first real request - see "Startup:FailFastOnDbCheck".
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("StartupDbCheck");
@@ -189,8 +201,6 @@ var app = builder.Build();
         logger.LogInformation("Database schema check completed (DatabaseProvider={Provider}).",
             app.Configuration["DatabaseProvider"]);
 
-        var loadDefaults = LoadConfigDefaults.ReadFrom(app.Configuration);
-        LoadConfigDefaults.EnsureValid(loadDefaults);
         await repo.LoadConfigEnsureSeededAsync(loadDefaults);
 
         var loadConfigCache = app.Services.GetRequiredService<LoadConfigCache>();
@@ -239,7 +249,13 @@ if (knownProxies.Length > 0)
 
     foreach (string proxy in knownProxies)
     {
-        forwardedHeadersOptions.KnownProxies.Add(IPAddress.Parse(proxy));
+        if (!IPAddress.TryParse(proxy, out var proxyAddress))
+        {
+            throw new InvalidOperationException(
+                $"ForwardedHeaders:KnownProxies contains an invalid IP address: '{proxy}'.");
+        }
+
+        forwardedHeadersOptions.KnownProxies.Add(proxyAddress);
     }
 
     app.UseForwardedHeaders(forwardedHeadersOptions);

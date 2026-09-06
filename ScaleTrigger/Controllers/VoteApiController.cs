@@ -78,16 +78,35 @@ namespace ScaleTrigger.Controllers
 
                     int payloadBytes = RandomizedLoadValue("PayloadBytesPerVote");
                     byte[]? payload = null;
-                    if (payloadBytes > 0)
+
+                    // Reserved against the same MemoryLoadBudget as SimulateMemoryLoadAsync: up to
+                    // 10 MB (PayloadBytesPerVote's ceiling) held for the duration of the DB call was
+                    // previously uncounted, so a burst of concurrent votes could blow past the
+                    // configured memory ceiling through this path alone even with
+                    // MemoryKilobytesPerVote at 0. If the budget is already spoken for, this vote
+                    // just skips the payload - same "component skipped, rest of the vote still runs"
+                    // behavior SimulateMemoryLoadAsync uses.
+                    bool payloadBudgetReserved = payloadBytes > 0 && LoadSimulator.MemoryLoadBudget.TryReserve(payloadBytes);
+                    if (payloadBudgetReserved)
                     {
                         payload = new byte[payloadBytes];
                         Random.Shared.NextBytes(payload);
                     }
 
-                    await repo.VoteAddAsync(option, payload, dbHashIterations, ct);
-                    logger.LogDebug(
-                        "VoteAddAsync completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, PayloadBytes={PayloadBytes}, DbCpuIterations={DbCpuIterations}).",
-                        stopwatch.ElapsedMilliseconds, databaseProvider, payloadBytes, dbHashIterations);
+                    try
+                    {
+                        await repo.VoteAddAsync(option, payload, dbHashIterations, ct);
+                        logger.LogDebug(
+                            "VoteAddAsync completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, PayloadBytes={PayloadBytes}, DbCpuIterations={DbCpuIterations}).",
+                            stopwatch.ElapsedMilliseconds, databaseProvider, payloadBytes, dbHashIterations);
+                    }
+                    finally
+                    {
+                        if (payloadBudgetReserved)
+                        {
+                            LoadSimulator.MemoryLoadBudget.Release(payloadBytes);
+                        }
+                    }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
