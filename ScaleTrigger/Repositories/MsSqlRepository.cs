@@ -18,7 +18,7 @@ namespace ScaleTrigger.Repositories
             this.useManagedIdentity = useManagedIdentity;
         }
 
-        private async Task<SqlConnection> CreateConnectionAsync()
+        private async Task<SqlConnection> CreateConnectionAsync(CancellationToken ct = default)
         {
             var connection = new SqlConnection(connectionString);
 
@@ -28,13 +28,13 @@ namespace ScaleTrigger.Repositories
                 connection.AccessToken = await AzureSqlAuthProvider.GetAccessTokenAsync();
             }
 
-            await connection.OpenAsync();
+            await connection.OpenAsync(ct);
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteAdd";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
@@ -48,18 +48,18 @@ namespace ScaleTrigger.Repositories
 
             cmd.Parameters.AddWithValue("@HashIterations", hashIterations);
 
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         /// <summary>Calls DbCpuBurn directly; no INSERT into Vote/Payload.</summary>
-        public async Task DbCpuBurnAsync(int hashIterations)
+        public async Task DbCpuBurnAsync(int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "DbCpuBurn";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
             cmd.Parameters.AddWithValue("@Iterations", hashIterations);
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         /// <summary>VoteReportGet reads with WITH (NOLOCK), so it doesn't wait behind a concurrent VoteAdd's lock under READ COMMITTED.</summary>
@@ -250,8 +250,14 @@ namespace ScaleTrigger.Repositories
             return DbFailureKind.ConnectionFailure;
         }
 
-        /// <summary>40613 = database unavailable (serverless auto-pause/resuming or failover), 49918/49920 = not enough resources/too many requests (resource governor), 4060 = cannot open database (can also fire transiently during serverless resume), 1205 = chosen as the deadlock victim.</summary>
+        /// <summary>Numbers per Microsoft's recommended Azure SQL transient-error list: 40613 = database
+        /// unavailable (serverless auto-pause/resuming or failover), 49918/49920 = not enough
+        /// resources/too many requests (resource governor), 4060 = cannot open database (can also fire
+        /// transiently during serverless resume), 1205 = chosen as the deadlock victim, 10928/10929 =
+        /// resource limits hit (worker threads/sessions), 40501 = service busy, 40197 = error processing
+        /// the request (service migrating/rebalancing), 233/64 = connection reset during handshake/mid-session.</summary>
         public bool IsTransientException(Exception ex) =>
-            ex is SqlException sqlEx && sqlEx.Number is 40613 or 49918 or 49920 or 4060 or 1205;
+            ex is SqlException sqlEx && sqlEx.Number is 40613 or 49918 or 49920 or 4060 or 1205
+                or 10928 or 10929 or 40501 or 40197 or 233 or 64;
     }
 }

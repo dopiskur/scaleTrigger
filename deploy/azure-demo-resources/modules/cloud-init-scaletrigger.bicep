@@ -72,6 +72,7 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment="Auth__Enabled=true"
 Environment="AdminUser__Username=__AUTH_USERNAME__"
 Environment="AdminUser__Password=__AUTH_PASSWORD__"
+Environment="ForwardedHeaders__KnownProxies=127.0.0.1"
 __DB_ENV_LINES__
 
 [Install]

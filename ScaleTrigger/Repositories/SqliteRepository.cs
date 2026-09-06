@@ -16,55 +16,55 @@ namespace ScaleTrigger.Repositories
         }
 
         /// <summary>busy_timeout avoids "database is locked" under concurrent writers; WAL mode keeps readers and writers from blocking each other.</summary>
-        private async Task<SqliteConnection> CreateConnectionAsync()
+        private async Task<SqliteConnection> CreateConnectionAsync(CancellationToken ct = default)
         {
             var connection = new SqliteConnection(connectionString);
-            await connection.OpenAsync();
+            await connection.OpenAsync(ct);
 
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = "PRAGMA busy_timeout = 5000;";
-                await cmd.ExecuteNonQueryAsync();
+                await cmd.ExecuteNonQueryAsync(ct);
             }
 
             using (var cmd = connection.CreateCommand())
             {
                 cmd.CommandText = "PRAGMA journal_mode = WAL;";
-                await cmd.ExecuteNonQueryAsync();
+                await cmd.ExecuteNonQueryAsync(ct);
             }
 
             return connection;
         }
 
         /// <summary>Registers LoadSimulator.HashIterations as a scalar function and calls it from SQL, so the burn is dispatched by the SQL engine like the other providers' VoteAdd/DbCpuBurn.</summary>
-        private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int hashIterations)
+        private static async Task RunSysbenchCpuAsync(SqliteConnection connection, int hashIterations, CancellationToken ct = default)
         {
-            connection.CreateFunction("sysbench_cpu", (long iterations) => LoadSimulator.HashIterations(iterations));
+            connection.CreateFunction("sysbench_cpu", (long iterations) => LoadSimulator.HashIterations(iterations, ct));
 
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT sysbench_cpu($hashIterations);";
             cmd.Parameters.AddWithValue("$hashIterations", hashIterations);
-            await cmd.ExecuteScalarAsync();
+            await cmd.ExecuteScalarAsync(ct);
         }
 
         /// <summary>Reuses the same sysbench_cpu scalar function VoteAdd calls, but does no INSERT at all.</summary>
-        public async Task DbCpuBurnAsync(int hashIterations)
+        public async Task DbCpuBurnAsync(int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
 
             if (hashIterations > 0)
             {
-                await RunSysbenchCpuAsync(connection, hashIterations);
+                await RunSysbenchCpuAsync(connection, hashIterations, ct);
             }
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
 
             if (hashIterations > 0)
             {
-                await RunSysbenchCpuAsync(connection, hashIterations);
+                await RunSysbenchCpuAsync(connection, hashIterations, ct);
             }
 
             long newIdVote;
@@ -72,7 +72,7 @@ namespace ScaleTrigger.Repositories
             {
                 cmd.CommandText = "INSERT INTO Vote (\"Option\") VALUES ($option) RETURNING IDVote";
                 cmd.Parameters.AddWithValue("$option", option);
-                newIdVote = (long)(await cmd.ExecuteScalarAsync())!;
+                newIdVote = (long)(await cmd.ExecuteScalarAsync(ct))!;
             }
 
             if (payload != null)
@@ -81,7 +81,7 @@ namespace ScaleTrigger.Repositories
                 payloadCmd.CommandText = "INSERT INTO Payload (IDVote, Data) VALUES ($idVote, $data)";
                 payloadCmd.Parameters.AddWithValue("$idVote", newIdVote);
                 payloadCmd.Parameters.AddWithValue("$data", payload);
-                await payloadCmd.ExecuteNonQueryAsync();
+                await payloadCmd.ExecuteNonQueryAsync(ct);
             }
         }
 

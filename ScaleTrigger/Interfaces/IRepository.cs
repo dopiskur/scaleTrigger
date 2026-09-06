@@ -5,12 +5,12 @@ namespace ScaleTrigger.Interfaces
     public interface IRepository
     {
         /// <summary>Pass null, not an empty array, to skip the payload insert. hashIterations &gt; 0 runs a chained SHA-512 burn inside the database before the insert.</summary>
-        Task VoteAddAsync(string option, byte[]? payload, int hashIterations);
+        Task VoteAddAsync(string option, byte[]? payload, int hashIterations, CancellationToken ct = default);
 
         Task<VoteReport> VoteReportGetAsync();
 
         /// <summary>Same CPU burn as VoteAdd, without touching Vote/Payload. 0 is a no-op.</summary>
-        Task DbCpuBurnAsync(int hashIterations);
+        Task DbCpuBurnAsync(int hashIterations, CancellationToken ct = default);
 
         /// <summary>Opens and closes a connection without querying, so a bad config surfaces at startup, not on the first vote.</summary>
         Task TestConnectionAsync();

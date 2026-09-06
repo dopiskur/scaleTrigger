@@ -15,16 +15,16 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
-        private async Task<NpgsqlConnection> CreateConnectionAsync()
+        private async Task<NpgsqlConnection> CreateConnectionAsync(CancellationToken ct = default)
         {
             var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
+            await connection.OpenAsync(ct);
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "CALL vote_add(@option, @payload, @hashIterations)";
             cmd.Parameters.AddWithValue("option", option);
@@ -37,17 +37,17 @@ namespace ScaleTrigger.Repositories
 
             cmd.Parameters.AddWithValue("hashIterations", hashIterations);
 
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         /// <summary>Calls db_cpu_burn directly; no INSERT into vote/payload.</summary>
-        public async Task DbCpuBurnAsync(int hashIterations)
+        public async Task DbCpuBurnAsync(int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "CALL db_cpu_burn(@iterations)";
             cmd.Parameters.AddWithValue("iterations", hashIterations);
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         /// <summary>No NOLOCK hint needed: a plain SELECT is always an MVCC snapshot read here. Columns aliased to PascalCase for RepositoryMappers.MapVoteReport.</summary>

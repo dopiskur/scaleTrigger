@@ -20,26 +20,35 @@ namespace ScaleTrigger
         }
 
         /// <summary>Chained SHA-512: each hash's output feeds the next, so the JIT can't fold the loop away.</summary>
-        public static void SimulateCpuLoad(int iterations)
+        public static void SimulateCpuLoad(int iterations, CancellationToken ct = default)
         {
             if (iterations <= 0)
             {
                 return;
             }
 
-            byte[] result = HashIterations(iterations);
+            byte[] result = HashIterations(iterations, ct);
             GC.KeepAlive(result);
         }
 
-        /// <summary>Shared by SimulateCpuLoad and SqliteRepository's sysbench_cpu scalar function.</summary>
-        internal static byte[] HashIterations(long iterations)
+        /// <summary>Shared by SimulateCpuLoad and SqliteRepository's sysbench_cpu scalar function
+        /// (which always calls with the default, uncancellable token - only the app-side CPU load
+        /// has a request timeout to observe).</summary>
+        internal static byte[] HashIterations(long iterations, CancellationToken ct = default)
         {
+            const long checkEvery = 100_000;
+
             byte[] buffer = new byte[64];
             Random.Shared.NextBytes(buffer);
 
             for (long i = 0; i < iterations; i++)
             {
                 buffer = SHA512.HashData(buffer);
+
+                if (i % checkEvery == 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                }
             }
 
             return buffer;
@@ -114,27 +123,31 @@ namespace ScaleTrigger
 
                 GC.KeepAlive(chunks);
             }
-            catch (OperationCanceledException)
-            {
-                // request timeout or shutdown mid-ramp - chunks already allocated get GC'd normally
-            }
             finally
             {
+                // On cancellation mid-ramp, the exception propagates past this finally (chunks
+                // already allocated get GC'd normally) so the caller's timeout actually aborts
+                // the request instead of being swallowed here while the rest of the vote keeps running.
                 MemoryLoadBudget.Release(totalBytes);
             }
         }
 
-        /// <summary>Each call uses its own uniquely-named file so concurrent votes don't serialize on a shared one.</summary>
-        public static async Task SimulateDiskLoad(int kilobytes)
+        /// <summary>Each call uses its own uniquely-named file so concurrent votes don't serialize on
+        /// a shared one. Writes from a small reusable buffer refilled each chunk, rather than
+        /// allocating the full file size up front, so a large DiskWriteKilobytesPerVote produces disk
+        /// I/O pressure instead of a memory spike - and so the amount actually held in memory at once
+        /// is bounded regardless of how large the configured value is.</summary>
+        public static async Task SimulateDiskLoad(int kilobytes, CancellationToken ct = default)
         {
             if (kilobytes <= 0)
             {
                 return;
             }
 
-            long sizeInBytes = (long)kilobytes * 1024;
-            byte[] buffer = new byte[sizeInBytes];
-            Random.Shared.NextBytes(buffer);
+            const int chunkSizeBytes = 64 * 1024;
+
+            long remaining = (long)kilobytes * 1024;
+            byte[] buffer = new byte[Math.Min(chunkSizeBytes, remaining)];
 
             string directory = await DiskLoadDirectory.Value;
             string path = Path.Combine(directory, $"{Guid.NewGuid():N}.tmp");
@@ -143,10 +156,17 @@ namespace ScaleTrigger
             {
                 using var stream = new FileStream(
                     path, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                    bufferSize: 4096, FileOptions.WriteThrough);
+                    bufferSize: 4096, FileOptions.Asynchronous | FileOptions.WriteThrough);
 
-                stream.Write(buffer, 0, buffer.Length);
-                stream.Flush(flushToDisk: true);
+                while (remaining > 0)
+                {
+                    int thisChunk = (int)Math.Min(buffer.Length, remaining);
+                    Random.Shared.NextBytes(buffer.AsSpan(0, thisChunk));
+                    await stream.WriteAsync(buffer.AsMemory(0, thisChunk), ct);
+                    remaining -= thisChunk;
+                }
+
+                await stream.FlushAsync(ct);
             }
             finally
             {
@@ -155,9 +175,9 @@ namespace ScaleTrigger
         }
 
         /// <summary>Task.Delay, not a blocking sleep, so the request thread is freed for the wait.</summary>
-        public static Task SimulateNetworkLatencyAsync(int milliseconds)
+        public static Task SimulateNetworkLatencyAsync(int milliseconds, CancellationToken ct = default)
         {
-            return milliseconds > 0 ? Task.Delay(milliseconds) : Task.CompletedTask;
+            return milliseconds > 0 ? Task.Delay(milliseconds, ct) : Task.CompletedTask;
         }
     }
 }

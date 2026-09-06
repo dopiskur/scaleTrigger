@@ -18,6 +18,12 @@ services:
     container_name: scaletrigger
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy

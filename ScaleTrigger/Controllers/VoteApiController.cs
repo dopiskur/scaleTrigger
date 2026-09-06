@@ -56,10 +56,10 @@ namespace ScaleTrigger.Controllers
                 // SynchronizationContext to marshal back to, unlike classic ASP.NET), so running
                 // this CPU-bound work synchronously here uses the same pool a wrapping Task.Run
                 // would - the extra hop just added scheduling overhead without isolating anything.
-                LoadSimulator.SimulateCpuLoad(cpuIterations);
+                LoadSimulator.SimulateCpuLoad(cpuIterations, ct);
                 await LoadSimulator.SimulateMemoryLoadAsync(memoryKilobytes, ct);
-                await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes);
-                await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds);
+                await LoadSimulator.SimulateDiskLoad(diskWriteKilobytes, ct);
+                await LoadSimulator.SimulateNetworkLatencyAsync(networkLatencyMilliseconds, ct);
 
                 var repo = repoFactory.GetRepo();
                 string databaseProvider = configuration["DatabaseProvider"] ?? "Sqlite";
@@ -69,8 +69,8 @@ namespace ScaleTrigger.Controllers
                 {
                     if (dbCpuBurnOnly)
                     {
-                        await repo.DbCpuBurnAsync(dbHashIterations);
-                        logger.LogInformation(
+                        await repo.DbCpuBurnAsync(dbHashIterations, ct);
+                        logger.LogDebug(
                             "VoteAdd (dbCpuBurnOnly) completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, DbCpuIterations={DbCpuIterations}).",
                             stopwatch.ElapsedMilliseconds, databaseProvider, dbHashIterations);
                         return Ok();
@@ -84,10 +84,17 @@ namespace ScaleTrigger.Controllers
                         Random.Shared.NextBytes(payload);
                     }
 
-                    await repo.VoteAddAsync(option, payload, dbHashIterations);
-                    logger.LogInformation(
+                    await repo.VoteAddAsync(option, payload, dbHashIterations, ct);
+                    logger.LogDebug(
                         "VoteAddAsync completed in {ElapsedMilliseconds}ms (DatabaseProvider={DatabaseProvider}, PayloadBytes={PayloadBytes}, DbCpuIterations={DbCpuIterations}).",
                         stopwatch.ElapsedMilliseconds, databaseProvider, payloadBytes, dbHashIterations);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    // Request timeout/client disconnect, not a database failure - let it propagate
+                    // so RequestTimeoutsMiddleware (or Kestrel) handles it instead of this being
+                    // misreported as a 503 DB error below.
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -177,6 +184,7 @@ namespace ScaleTrigger.Controllers
                 await repo.EnsureSchemaAsync();
 
                 var defaults = LoadConfigDefaults.ReadFrom(configuration);
+                LoadConfigDefaults.EnsureValid(defaults);
                 await repo.LoadConfigEnsureSeededAsync(defaults);
                 loadConfigCache.Set(await repo.LoadConfigGetAsync());
 

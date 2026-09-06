@@ -7,6 +7,11 @@
   },
   "AllowedHosts": "*",
 
+  "Serilog": {
+    "// FileEnabled": "true (default) = also write logs/scaletrigger-*.json next to the app, on top of the console sink Program.cs always configures; false = console only. Set to false on App Service (see app-service.bicep) - its filesystem is a network share, and per-vote logging under load turns that into avoidable I/O.",
+    "FileEnabled": true
+  },
+
   "DatabaseProvider": "Sqlite",
 
   "// UseManagedIdentity": "false = connection string password; true = Azure AD Managed Identity",
@@ -33,6 +38,11 @@
 
   "Cache": {
     "SlidingExpirationMinutes": 5
+  },
+
+  "ForwardedHeaders": {
+    "// KnownProxies": "Comma-separated IPs of reverse proxies directly in front of this app that are trusted to set X-Forwarded-For/-Proto (e.g. '127.0.0.1' for the nginx-fronted VM/scale-set deploy, where nginx is the only thing that can reach the app's loopback-only listener). Empty/unset (the default here) = no proxy trusted, Connection.RemoteIpAddress is used as-is - correct when nothing sits in front of the app (local/dev, Docker Compose exposing the container port directly). On Azure App Service, use the ASPNETCORE_FORWARDEDHEADERS_ENABLED app setting instead (see app-service.bicep) - App Service's front-end IP isn't fixed, so it can't be pinned here.",
+    "KnownProxies": ""
   },
 
   "LoadSafety": {

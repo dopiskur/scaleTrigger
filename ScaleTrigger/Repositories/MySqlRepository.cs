@@ -14,16 +14,16 @@ namespace ScaleTrigger.Repositories
             this.connectionString = connectionString;
         }
 
-        private async Task<MySqlConnection> CreateConnectionAsync()
+        private async Task<MySqlConnection> CreateConnectionAsync(CancellationToken ct = default)
         {
             var connection = new MySqlConnection(connectionString);
-            await connection.OpenAsync();
+            await connection.OpenAsync(ct);
             return connection;
         }
 
-        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations)
+        public async Task VoteAddAsync(string option, byte[]? payload, int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "VoteAdd";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
@@ -37,18 +37,18 @@ namespace ScaleTrigger.Repositories
 
             cmd.Parameters.AddWithValue("pHashIterations", hashIterations);
 
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         /// <summary>Calls DbCpuBurn directly; no INSERT into Vote/Payload.</summary>
-        public async Task DbCpuBurnAsync(int hashIterations)
+        public async Task DbCpuBurnAsync(int hashIterations, CancellationToken ct = default)
         {
-            using var connection = await CreateConnectionAsync();
+            using var connection = await CreateConnectionAsync(ct);
             using var cmd = connection.CreateCommand();
             cmd.CommandText = "DbCpuBurn";
             cmd.CommandType = System.Data.CommandType.StoredProcedure;
             cmd.Parameters.AddWithValue("pIterations", hashIterations);
-            await cmd.ExecuteNonQueryAsync();
+            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         /// <summary>No NOLOCK hint needed: InnoDB's plain SELECT is already a non-locking MVCC read.</summary>

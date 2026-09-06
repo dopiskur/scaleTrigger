@@ -135,11 +135,25 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: appServicePlan.id
     httpsOnly: true
+    // siteConfig.healthCheckPath is deliberately not set: /health/ready does a real database
+    // round-trip, and this tool's whole point is to intentionally saturate that database
+    // (DbCpuIterationsPerVote etc.) - wiring the platform's health probe to it would make App
+    // Service pull the instance out of rotation exactly when a load test is doing its job,
+    // sabotaging the experiment it's meant to measure. /health/ready still works for a human or
+    // external monitor to call directly; it's just not tied to this platform's own routing.
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|10.0'
       alwaysOn: true
       appSettings: [
         { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT', value: 'true' }
+
+        // App Service's Linux front-end always sits in front of the app and its address isn't
+        // fixed, so this is Microsoft's documented mechanism for exactly this case - trusting the
+        // single immediate hop unconditionally is safe here because the platform's own front-end
+        // strips any client-supplied X-Forwarded-* before adding its own. Without this, every
+        // client resolves to the front-end's IP, collapsing the per-IP login rate limiter to one
+        // shared bucket for all users.
+        { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
 
         { name: 'DatabaseProvider', value: databaseProvider }
         { name: 'UseManagedIdentity', value: string(useManagedIdentity) }
@@ -189,6 +203,11 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'Logging__LogLevel__Default', value: loggingLevelDefault }
         { name: 'Logging__LogLevel__Microsoft.AspNetCore', value: loggingLevelAspNetCore }
         { name: 'AllowedHosts', value: allowedHosts }
+
+        // App Service's filesystem is a network share (/home/site/wwwroot) - writing Serilog's
+        // file sink there under load adds avoidable I/O and eats the site's storage quota, on top
+        // of stdout already being captured by the platform's own log stream.
+        { name: 'Serilog__FileEnabled', value: 'false' }
       ]
     }
   }

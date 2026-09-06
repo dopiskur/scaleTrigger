@@ -10,6 +10,11 @@ namespace ScaleTrigger.Controllers
     {
         private readonly IConfiguration configuration;
 
+        // A full-saturation CPU/memory/disk run measures this node in isolation - two overlapping
+        // runs (a double-click, or two operators triggering one each) corrupt each other's
+        // numbers and simultaneously wreck the latency of every concurrent vote on this instance.
+        private static readonly SemaphoreSlim RunLock = new(1, 1);
+
         public NodeBenchmarkApiController(IConfiguration configuration)
         {
             this.configuration = configuration;
@@ -26,6 +31,23 @@ namespace ScaleTrigger.Controllers
         [HttpPost("run")]
         [Authorize(Policy = "OptionalJwt")]
         public async Task<ActionResult<NodeBenchmarkResult>> Run()
+        {
+            if (!await RunLock.WaitAsync(0))
+            {
+                return Conflict("A benchmark run is already in progress on this node.");
+            }
+
+            try
+            {
+                return await RunBenchmarkAsync();
+            }
+            finally
+            {
+                RunLock.Release();
+            }
+        }
+
+        private async Task<ActionResult<NodeBenchmarkResult>> RunBenchmarkAsync()
         {
             if (!int.TryParse(configuration["NodeBenchmark:CpuDurationSeconds"], out int cpuDurationSeconds))
             {

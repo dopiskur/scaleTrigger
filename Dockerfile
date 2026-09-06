@@ -20,7 +20,16 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 
+# curl isn't in the base aspnet image - needed for HEALTHCHECK below.
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN chown -R app:app /app
 USER app
+
+# /health/live only confirms the process is accepting requests (no DB round-trip) - a database
+# outage shouldn't make Docker/Compose think the container itself needs restarting.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["curl", "-f", "http://localhost:8080/health/live"]
 
 ENTRYPOINT ["dotnet", "ScaleTrigger.dll"]
