@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "3522778040766801838"
+      "templateHash": "10965697371546920483"
     }
   },
   "parameters": {
@@ -422,7 +422,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "5453072327346717238"
+              "templateHash": "9611587696868910062"
             }
           },
           "parameters": {
@@ -711,6 +711,10 @@
                       "value": "true"
                     },
                     {
+                      "name": "ASPNETCORE_FORWARDEDHEADERS_ENABLED",
+                      "value": "true"
+                    },
+                    {
                       "name": "DatabaseProvider",
                       "value": "[parameters('databaseProvider')]"
                     },
@@ -873,6 +877,10 @@
                     {
                       "name": "AllowedHosts",
                       "value": "[parameters('allowedHosts')]"
+                    },
+                    {
+                      "name": "Serilog__FileEnabled",
+                      "value": "false"
                     }
                   ]
                 }
