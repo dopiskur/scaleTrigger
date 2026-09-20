@@ -8,6 +8,15 @@ The solution targets **.NET 10 (LTS, supported until November 2028)**. The .NET 
 
 **Primary use cases:** demos and training sessions (MCT / Azure training), personal/internal experimentation, and proving/documenting autoscale behavior.
 
+## Built for MCT / Azure training
+
+- **Live, uninterrupted demos** — tune CPU/memory/disk/network load per request from the dashboard or a single API call while traffic keeps flowing; no restart or redeploy, so a session never pauses to switch scenarios.
+- **Covers the scaling scenarios trainers actually teach** — App Service, Container Apps, AKS, VM Scale Sets, and database-tier autoscale (Azure SQL Serverless, Flexible Server).
+- **One-click demo environment** ([deploy/azure-demo-resources](deploy/azure-demo-resources/README.md)) — provisions five pre-wired scaling scenarios plus a live monitoring dashboard in ~30-40 minutes, ready for a session.
+- **Reusable lecture profiles** — Light/Medium/Heavy presets plus Export/Import LoadConfig JSON, so a prepared load profile for a specific lecture loads instantly instead of being retyped every time.
+- **No-guesswork calibration** — "Run benchmark" measures the actual node and suggests a realistic `CpuIterationsPerVote` range instead of trial and error in front of a class.
+- **Take-home results** — [`Run-ScalingScenarios.ps1`](deploy/azure-demo-resources/Run-ScalingScenarios.ps1) drives all five scenarios and produces CSVs plus an HTML report, useful for handouts or documenting exactly when and how fast each scenario scaled.
+
 ## How it works
 
 Every `POST /api/vote/add?option=yes|no` call:
