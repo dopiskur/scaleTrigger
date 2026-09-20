@@ -27,8 +27,11 @@ passed as "" to take their default. Don't reorder these without updating every c
   8. timeout_seconds          (default: 10)
   9. concurrency               (default: 200)
   10. report_interval_seconds (default: 5)
-  11. username                (default: admin)
-  12. password                (default: admin)
+  11. username                (default: demoadmin - matches main.bicep's adminUsername default;
+                                override if the target was deployed with a different -AdminUsername)
+  12. password                (REQUIRED if the target API requires authentication - the deploy-time
+                                -AdminPassword; no default, since unlike username it's a secret with
+                                no safe guess. See Run-ScalingScenarios.ps1's own -AdminPassword.)
 """
 
 import json
@@ -67,8 +70,8 @@ def parse_args():
         "timeout_seconds": float(get(7, "10")),
         "concurrency": int(get(8, "200")),
         "report_interval_seconds": float(get(9, "5")),
-        "username": get(10, "admin"),
-        "password": get(11, "admin"),
+        "username": get(10, "demoadmin"),
+        "password": get(11),
     }
 
 
@@ -247,6 +250,12 @@ def main():
 
     jwt_token = ""
     if requires_auth:
+        if not args["password"]:
+            raise SystemExit(
+                f"{args['api_url']} requires authentication but no password was given (arg 12). "
+                "Pass the same AdminUser:Password / -AdminPassword the target was deployed with - "
+                "there is no safe default for it."
+            )
         jwt_token = fetch_jwt_token(
             args["api_url"], args["username"], args["password"], ssl_context, args["timeout_seconds"],
         )
