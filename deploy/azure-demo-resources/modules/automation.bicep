@@ -14,9 +14,10 @@ param logAnalyticsWorkspaceId string
 @description('UTC hour (0-23) the daily VMSS shutdown schedule fires at. Kept in UTC (rather than a named time zone) so the schedule start time can be computed declaratively without a timezone/DST-aware function.')
 param autoShutdownHour int = 5
 
-@description('Raw GitHub URLs the two runbooks are published from - override if deploying from a fork/branch.')
+@description('Raw GitHub URLs the three runbooks are published from - override if deploying from a fork/branch.')
 param teardownRunbookUri string = 'https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/teardown-runbook.ps1'
 param stopVmssRunbookUri string = 'https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/stop-vmss-runbook.ps1'
+param loadRunbookUri string = 'https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/scaleTriggerLoad-runbook.py'
 
 @description('Used only to compute a schedule start time in the future - not a meaningful user-facing parameter.')
 param deploymentTime string = utcNow('yyyy-MM-ddTHH:mm:ssZ')
@@ -290,6 +291,23 @@ resource stopVmssRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-
   }
 }
 
+// Load generator for the ScaleTrigger API (scaleTriggerLoad-runbook.py) - stdlib-only Python
+// counterpart to scripts/scaleTriggerLoad.py, run as a runbook job instead of a local python.exe
+// process. Takes no RBAC role grant: it only makes outbound HTTP calls to the app URL.
+resource loadRunbook 'Microsoft.Automation/automationAccounts/runbooks@2023-11-01' = {
+  parent: automationAccount
+  name: 'Invoke-ScaleTriggerLoad'
+  location: location
+  properties: {
+    runbookType: 'Python3'
+    logProgress: false
+    logVerbose: false
+    publishContentLink: {
+      uri: loadRunbookUri
+    }
+  }
+}
+
 resource dailyShutdownSchedule 'Microsoft.Automation/automationAccounts/schedules@2023-11-01' = if (autoShutdownEnabled) {
   parent: automationAccount
   name: 'daily-vmss-shutdown'
@@ -400,5 +418,6 @@ output logicAppPlanName string = logicAppPlan.name
 output automationAccountName string = automationAccount.name
 output teardownRunbookName string = teardownRunbook.name
 output stopVmssRunbookNameOut string = autoShutdownEnabled ? 'Stop-ScaleSetInstances' : ''
+output loadRunbookName string = loadRunbook.name
 #disable-next-line outputs-should-not-contain-secrets
 output logicAppPlanTriggerUrl string = listCallbackUrl('${logicAppPlan.id}/triggers/manual', '2019-05-01').value

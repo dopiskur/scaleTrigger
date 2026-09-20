@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "1516543078951137012"
+      "templateHash": "2421398040372003605"
     }
   },
   "parameters": {
@@ -129,7 +129,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "14663877725324922425"
+              "templateHash": "17818485107085693468"
             }
           },
           "parameters": {
@@ -196,7 +196,7 @@
                 "cleanupPreference": "OnSuccess",
                 "timeout": "PT20M",
                 "arguments": "[format('-waitSeconds {0}', parameters('vmInsightsPropagationWaitSeconds'))]",
-                "scriptContent": "      param([int] $waitSeconds)\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\n      Start-Sleep -Seconds $waitSeconds\n    "
+                "scriptContent": "      param([int] $waitSeconds)\r\n      Write-Host \"Waiting $waitSeconds seconds for the VM Insights solution to finish provisioning the InsightsMetrics table before any data collection rule references it.\"\r\n      Start-Sleep -Seconds $waitSeconds\r\n    "
               },
               "dependsOn": [
                 "[resourceId('Microsoft.OperationsManagement/solutions', format('VMInsights({0})', format('{0}-logs', parameters('resourcePrefix'))))]"
@@ -2310,7 +2310,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "5843000288778775859"
+              "templateHash": "14298445673906150288"
             }
           },
           "parameters": {
@@ -2367,12 +2367,16 @@
               "type": "string",
               "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/teardown-runbook.ps1",
               "metadata": {
-                "description": "Raw GitHub URLs the two runbooks are published from - override if deploying from a fork/branch."
+                "description": "Raw GitHub URLs the three runbooks are published from - override if deploying from a fork/branch."
               }
             },
             "stopVmssRunbookUri": {
               "type": "string",
               "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/stop-vmss-runbook.ps1"
+            },
+            "loadRunbookUri": {
+              "type": "string",
+              "defaultValue": "https://raw.githubusercontent.com/dopiskur/scaleTrigger/master/deploy/azure-demo-resources/scripts/scaleTriggerLoad-runbook.py"
             },
             "deploymentTime": {
               "type": "string",
@@ -2736,6 +2740,23 @@
               ]
             },
             {
+              "type": "Microsoft.Automation/automationAccounts/runbooks",
+              "apiVersion": "2023-11-01",
+              "name": "[format('{0}/{1}', format('{0}-automation', parameters('resourcePrefix')), 'Invoke-ScaleTriggerLoad')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "runbookType": "Python3",
+                "logProgress": false,
+                "logVerbose": false,
+                "publishContentLink": {
+                  "uri": "[parameters('loadRunbookUri')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]"
+              ]
+            },
+            {
               "condition": "[parameters('autoShutdownEnabled')]",
               "type": "Microsoft.Automation/automationAccounts/schedules",
               "apiVersion": "2023-11-01",
@@ -2792,7 +2813,7 @@
                 "cleanupPreference": "OnSuccess",
                 "timeout": "PT10M",
                 "arguments": "[format('-resourceGroupName {0} -automationAccountName {1} -runbookName {2} -scheduleName {3} -vmssResourceGroup {4} -vmssName {5}', resourceGroup().name, format('{0}-automation', parameters('resourcePrefix')), 'Stop-ScaleSetInstances', 'daily-vmss-shutdown', parameters('scaleSetResourceGroup'), variables('vmssName'))]",
-                "scriptContent": "      param(\n        [string] $resourceGroupName,\n        [string] $automationAccountName,\n        [string] $runbookName,\n        [string] $scheduleName,\n        [string] $vmssResourceGroup,\n        [string] $vmssName\n      )\n      $maxAttempts = 5\n      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {\n        try {\n          Register-AzAutomationScheduledRunbook `\n            -ResourceGroupName $resourceGroupName `\n            -AutomationAccountName $automationAccountName `\n            -RunbookName $runbookName `\n            -ScheduleName $scheduleName `\n            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `\n            -ErrorAction Stop | Out-Null\n          Write-Host \"Job schedule registered for $runbookName / $scheduleName.\"\n          break\n        }\n        catch {\n          if ($_.Exception.Message -like '*already*') {\n            Write-Host \"Job schedule already registered for $runbookName / $scheduleName - nothing to do.\"\n            break\n          }\n          if ($attempt -eq $maxAttempts) {\n            throw\n          }\n          Write-Host \"Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet.\"\n          Start-Sleep -Seconds 15\n        }\n      }\n    "
+                "scriptContent": "      param(\r\n        [string] $resourceGroupName,\r\n        [string] $automationAccountName,\r\n        [string] $runbookName,\r\n        [string] $scheduleName,\r\n        [string] $vmssResourceGroup,\r\n        [string] $vmssName\r\n      )\r\n      $maxAttempts = 5\r\n      for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {\r\n        try {\r\n          Register-AzAutomationScheduledRunbook `\r\n            -ResourceGroupName $resourceGroupName `\r\n            -AutomationAccountName $automationAccountName `\r\n            -RunbookName $runbookName `\r\n            -ScheduleName $scheduleName `\r\n            -Parameters @{ VmssResourceGroup = $vmssResourceGroup; VmssName = $vmssName } `\r\n            -ErrorAction Stop | Out-Null\r\n          Write-Host \"Job schedule registered for $runbookName / $scheduleName.\"\r\n          break\r\n        }\r\n        catch {\r\n          if ($_.Exception.Message -like '*already*') {\r\n            Write-Host \"Job schedule already registered for $runbookName / $scheduleName - nothing to do.\"\r\n            break\r\n          }\r\n          if ($attempt -eq $maxAttempts) {\r\n            throw\r\n          }\r\n          Write-Host \"Attempt $attempt failed ($($_.Exception.Message)), retrying in 15s - likely the role assignment above hasn't propagated yet.\"\r\n          Start-Sleep -Seconds 15\r\n        }\r\n      }\r\n    "
               },
               "dependsOn": [
                 "[resourceId('Microsoft.Automation/automationAccounts', format('{0}-automation', parameters('resourcePrefix')))]",
@@ -2989,6 +3010,10 @@
             "stopVmssRunbookNameOut": {
               "type": "string",
               "value": "[if(parameters('autoShutdownEnabled'), 'Stop-ScaleSetInstances', '')]"
+            },
+            "loadRunbookName": {
+              "type": "string",
+              "value": "Invoke-ScaleTriggerLoad"
             },
             "logicAppPlanTriggerUrl": {
               "type": "string",
